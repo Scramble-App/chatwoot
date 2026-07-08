@@ -8,6 +8,7 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/scramble-app/chatwoot
+  BUILD_BASE_IMAGE_NAME: ghcr.io/scramble-app/chatwoot-build-base
 
 permissions:
   contents: read
@@ -29,6 +30,40 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare dependency base tag
+        id: deps
+        shell: bash
+        run: |
+          deps_hash=$(sha256sum docker/Dockerfile.base Gemfile Gemfile.lock package.json pnpm-lock.yaml | sha256sum | cut -c1-16)
+          base_image="${BUILD_BASE_IMAGE_NAME}:deps-${deps_hash}"
+
+          echo "hash=${deps_hash}" >> "$GITHUB_OUTPUT"
+          echo "image=${base_image}" >> "$GITHUB_OUTPUT"
+
+      - name: Check dependency base image
+        id: base
+        shell: bash
+        run: |
+          if docker buildx imagetools inspect "${{ steps.deps.outputs.image }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push dependency base image
+        if: steps.base.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.deps.outputs.image }}
+            ${{ env.BUILD_BASE_IMAGE_NAME }}:latest
+          cache-from: type=gha,scope=build-base
+          cache-to: type=gha,mode=max,scope=build-base
 
       - name: Prepare image tags
         id: tags
@@ -54,9 +89,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile
+          file: docker/Dockerfile.app
           platforms: linux/amd64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            BUILD_BASE_IMAGE=${{ steps.deps.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
