@@ -11,7 +11,7 @@ env:
   BUILD_BASE_IMAGE_NAME: ghcr.io/scramble-app/chatwoot-build-base
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -75,6 +75,8 @@ jobs:
             | cut -c1-120)
           short_sha="${GITHUB_SHA::7}"
 
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+
           {
             echo 'tags<<EOF'
             echo "${IMAGE_NAME}:${branch_tag}"
@@ -97,3 +99,27 @@ jobs:
             BUILD_BASE_IMAGE=${{ steps.deps.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Package deploy bundle
+        shell: bash
+        run: |
+          bundle_dir="${RUNNER_TEMP}/chatwoot-deploy"
+          rm -rf "${bundle_dir}"
+          mkdir -p "${bundle_dir}/docker/nginx/templates"
+
+          cp docker-compose.scramble.yaml "${bundle_dir}/docker-compose.yaml"
+          cp docker/nginx/templates/scramble.conf.template "${bundle_dir}/docker/nginx/templates/scramble.conf.template"
+          cp .env.example "${bundle_dir}/.env.example"
+          cp script/deploy_scramble_chatwoot.sh "${bundle_dir}/deploy_scramble_chatwoot.sh"
+
+          tar -C "${bundle_dir}" -czf "chatwoot-deploy-${{ steps.tags.outputs.short_sha }}.tar.gz" .
+
+      - name: Publish deploy bundle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chatwoot-deploy-${{ steps.tags.outputs.short_sha }}
+          name: Chatwoot deploy ${{ steps.tags.outputs.short_sha }}
+          files: |
+            chatwoot-deploy-${{ steps.tags.outputs.short_sha }}.tar.gz
+            script/deploy_scramble_chatwoot.sh
+          make_latest: false
