@@ -18,13 +18,14 @@ RSpec.describe 'Team Members API', type: :request do
       let(:agent) { create(:user, account: account, role: :agent) }
 
       it 'returns all the teams' do
-        create(:team_member, team: team, user: agent)
+        create(:team_member, team: team, user: agent, team_lead: true)
         get "/api/v1/accounts/#{account.id}/teams/#{team.id}/team_members",
             headers: agent.create_new_auth_token,
             as: :json
 
         expect(response).to have_http_status(:success)
         expect(response.parsed_body.first['id']).to eq(agent.id)
+        expect(response.parsed_body.first['team_lead']).to be(true)
       end
     end
   end
@@ -136,7 +137,7 @@ RSpec.describe 'Team Members API', type: :request do
 
       it 'updates the team members when its administrator' do
         user_ids = (1..5).map { create(:user, account: account, role: :agent).id }
-        params = { user_ids: user_ids }
+        params = { user_ids: user_ids, team_lead_ids: [user_ids.first] }
 
         patch "/api/v1/accounts/#{account.id}/teams/#{team.id}/team_members",
               params: params,
@@ -146,6 +147,7 @@ RSpec.describe 'Team Members API', type: :request do
         expect(response).to have_http_status(:success)
         json_response = response.parsed_body
         expect(json_response.count).to eq(user_ids.count)
+        expect(json_response.find { |item| item['id'] == user_ids.first }['team_lead']).to be(true)
       end
 
       it 'ignores the user ids when its not a valid account user id' do

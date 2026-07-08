@@ -50,6 +50,30 @@ properties:
   content_attributes:
     type: object
     description: The content attributes for each content_type
+  operator_translation:
+    type:
+      - object
+      - 'null'
+    description: Operator-only translation for the current dashboard user.
+    properties:
+      id:
+        type: integer
+      message_id:
+        type: integer
+      locale:
+        type: string
+      content:
+        type: string
+      provider:
+        type: string
+      model:
+        type:
+          - string
+          - 'null'
+      status:
+        type: string
+      updated_at:
+        type: integer
   sender_type:
     type:
       - string

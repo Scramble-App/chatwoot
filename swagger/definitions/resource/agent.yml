@@ -11,6 +11,16 @@ properties:
   auto_offline:
     type: boolean
     description: Whether the availability status of agent is configured to go offline automatically when away.
+  availability_source:
+    type: string
+    enum: ['manual', 'schedule']
+    description: Whether availability is controlled manually or by the agent schedule.
+  schedule_enabled:
+    type: boolean
+    description: Whether the agent schedule controls availability.
+  schedule_timezone:
+    type: string
+    description: Timezone used to evaluate the agent schedule.
   confirmed:
     type: boolean
     description: Whether the agent has confirmed their email address.
@@ -27,6 +37,21 @@ properties:
     type: string
     enum: ['agent', 'administrator']
     description: The role of the agent
+  translation_locale:
+    type:
+      - string
+      - 'null'
+    description: Locale used for operator-only incoming message translations.
+  working_hours:
+    type: array
+    description: Weekly schedule intervals for the agent.
+    items:
+      type: object
+  schedule_exceptions:
+    type: array
+    description: One-off schedule exceptions for the agent.
+    items:
+      type: object
   thumbnail:
     type: string
     description: The thumbnail of the agent

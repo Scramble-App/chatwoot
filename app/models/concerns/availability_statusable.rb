@@ -21,6 +21,8 @@ module AvailabilityStatusable
   end
 
   def user_availability_status
+    return scheduled_availability_at if respond_to?(:schedule_enabled?) && schedule_enabled?
+
     # we are not considering presence in this case. Just returns the availability
     return availability unless auto_offline
 

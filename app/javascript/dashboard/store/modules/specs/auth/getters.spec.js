@@ -77,6 +77,42 @@ describe('#getters', () => {
         )
       ).toEqual('busy');
     });
+
+    it('prefers schedule-derived availability status', () => {
+      expect(
+        getters.getCurrentUserAvailability(
+          {
+            currentAccountId: 1,
+            currentUser: {
+              id: 1,
+              accounts: [
+                {
+                  id: 1,
+                  availability: 'online',
+                  availability_status: 'offline',
+                },
+              ],
+            },
+          },
+          { getCurrentAccountId: 1 }
+        )
+      ).toEqual('offline');
+    });
+  });
+
+  describe('#getCurrentUserAvailabilitySource', () => {
+    it('returns schedule source when account availability is schedule-managed', () => {
+      expect(
+        getters.getCurrentUserAvailabilitySource(
+          {
+            currentUser: {
+              accounts: [{ id: 1, availability_source: 'schedule' }],
+            },
+          },
+          { getCurrentAccountId: 1 }
+        )
+      ).toEqual('schedule');
+    });
   });
 
   describe('#getUISettings', () => {

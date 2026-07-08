@@ -69,6 +69,7 @@
     "AGENTS": {
       "AGENT": "Agent",
       "EMAIL": "Email",
+      "TEAM_LEAD": "Team lead",
       "BUTTON_TEXT": "Add agents",
       "ADD_AGENTS": "Adding Agents to your Team...",
       "SELECT": "select",
@@ -117,6 +118,9 @@
       },
       "AUTO_ASSIGN": {
         "LABEL": "Allow auto assign for this team."
+      },
+      "SHIFT_REASSIGN": {
+        "LABEL": "Unassign non-resolved conversations when an agent shift ends."
       },
       "SUBMIT_CREATE": "Create team"
     }

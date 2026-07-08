@@ -19,6 +19,9 @@ import ToggleSwitch from 'dashboard/components-next/switch/Switch.vue';
 const { t } = useI18n();
 const store = useStore();
 const currentUserAvailability = useMapGetter('getCurrentUserAvailability');
+const currentUserAvailabilitySource = useMapGetter(
+  'getCurrentUserAvailabilitySource'
+);
 const currentAccountId = useMapGetter('getCurrentAccountId');
 const currentUserAutoOffline = useMapGetter('getCurrentUserAutoOffline');
 
@@ -46,7 +49,14 @@ const availabilityStatuses = computed(() => {
 });
 
 const activeStatus = computed(() => {
-  return availabilityStatuses.value.find(status => status.active);
+  return (
+    availabilityStatuses.value.find(status => status.active) ||
+    availabilityStatuses.value[2]
+  );
+});
+
+const isAvailabilityScheduleManaged = computed(() => {
+  return currentUserAvailabilitySource.value === 'schedule';
 });
 
 const autoOfflineToggle = computed({
@@ -60,6 +70,11 @@ const autoOfflineToggle = computed({
 });
 
 function changeAvailabilityStatus(availability) {
+  if (isAvailabilityScheduleManaged.value) {
+    useAlert(t('PROFILE_SETTINGS.FORM.AVAILABILITY.MANAGED_BY_SCHEDULE'));
+    return;
+  }
+
   if (isImpersonating.value) {
     useAlert(t('PROFILE_SETTINGS.FORM.AVAILABILITY.IMPERSONATING_ERROR'));
     return;
@@ -91,6 +106,7 @@ function changeAvailabilityStatus(availability) {
               class="min-w-[96px]"
               icon="i-lucide-chevron-down"
               trailing-icon
+              :disabled="isAvailabilityScheduleManaged"
               @click="toggle"
             >
               <div class="flex gap-1 items-center flex-grow text-sm">
@@ -113,6 +129,12 @@ function changeAvailabilityStatus(availability) {
           </DropdownBody>
         </DropdownContainer>
       </DropdownItem>
+      <div
+        v-if="isAvailabilityScheduleManaged"
+        class="px-3 pb-2 text-xs text-n-slate-11"
+      >
+        {{ $t('PROFILE_SETTINGS.FORM.AVAILABILITY.MANAGED_BY_SCHEDULE') }}
+      </div>
       <DropdownItem>
         <div class="flex-grow flex items-center gap-1">
           {{ $t('SIDEBAR.SET_AUTO_OFFLINE.TEXT') }}

@@ -25,7 +25,10 @@ class Api::V1::ProfilesController < Api::BaseController
   end
 
   def availability
-    @user.account_users.find_by!(account_id: availability_params[:account_id]).update!(availability: availability_params[:availability])
+    account_user = @user.account_users.find_by!(account_id: availability_params[:account_id])
+    return if account_user.schedule_enabled?
+
+    account_user.update!(availability: availability_params[:availability])
   end
 
   def set_active_account

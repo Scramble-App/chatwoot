@@ -152,6 +152,27 @@ RSpec.describe Message do
     it 'returns push event payload' do
       expect(push_event_data).to eq(expected_data)
     end
+
+    it 'adds operator translation only to the operator translation payload' do
+      account_user = create(:account_user, account: message.account)
+      account_user.update!(translation_locale: 'ru')
+      translation = MessageTranslation.create!(
+        account: message.account,
+        message: message,
+        target_locale: 'ru',
+        provider: MessageTranslation::PROVIDER_OPENAI,
+        status: :completed,
+        content: 'Здравствуйте'
+      )
+
+      expect(message.push_event_data).not_to have_key(:operator_translation)
+      payload = message.push_event_data_with_operator_translation(account_user)
+      expect(payload[:operator_translation]).to include(
+        id: translation.id,
+        locale: 'ru',
+        content: 'Здравствуйте'
+      )
+    end
   end
 
   describe 'message create event' do

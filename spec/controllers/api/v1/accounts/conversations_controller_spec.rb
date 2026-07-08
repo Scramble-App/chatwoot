@@ -240,6 +240,42 @@ RSpec.describe 'Conversations API', type: :request do
         expect(JSON.parse(response.body, symbolize_names: true)[:id]).to eq(conversation.display_id)
       end
 
+      it 'returns operator translation for current user locale in conversation messages' do
+        administrator.account_users.find_by(account: account).update!(translation_locale: 'ru')
+        message = create(
+          :message,
+          message_type: :incoming,
+          account: account,
+          inbox: conversation.inbox,
+          conversation: conversation,
+          content: 'Merhaba'
+        )
+        translation = MessageTranslation.create!(
+          account: account,
+          message: message,
+          target_locale: 'ru',
+          provider: MessageTranslation::PROVIDER_OPENAI,
+          status: :completed,
+          content: 'Здравствуйте'
+        )
+
+        get "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}",
+            headers: administrator.create_new_auth_token,
+            as: :json
+
+        response_data = JSON.parse(response.body, symbolize_names: true)
+        expect(response_data[:messages].first[:operator_translation]).to include(
+          id: translation.id,
+          locale: 'ru',
+          content: 'Здравствуйте'
+        )
+        expect(response_data[:last_non_activity_message][:operator_translation]).to include(
+          id: translation.id,
+          locale: 'ru',
+          content: 'Здравствуйте'
+        )
+      end
+
       it 'shows the conversation if you are an agent with access to inbox' do
         create(:inbox_member, user: agent, inbox: conversation.inbox)
         get "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}",
@@ -1054,6 +1090,131 @@ RSpec.describe 'Conversations API', type: :request do
         response_body = response.parsed_body
         expect(response_body['payload'].length).to eq(1)
       end
+    end
+  end
+
+  describe 'POST /api/v1/accounts/{account.id}/conversations/:id/prepare_reply' do
+    let(:conversation) { create(:conversation, account: account) }
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let(:prepare_service) { instance_double(ReplyPreparations::PrepareReplyService, perform: 'Respuesta preparada') }
+
+    before do
+      create(:inbox_member, user: agent, inbox: conversation.inbox)
+    end
+
+    it 'prepares a reply for an authenticated operator without creating a message' do
+      allow(ReplyPreparations::PrepareReplyService).to receive(:new).and_return(prepare_service)
+
+      expect do
+        post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/prepare_reply",
+             headers: agent.create_new_auth_token,
+             params: { content: 'Please try again.' },
+             as: :json
+      end.not_to change(Message, :count)
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['content']).to eq('Respuesta preparada')
+      expect(ReplyPreparations::PrepareReplyService).to have_received(:new).with(
+        conversation: conversation,
+        content: 'Please try again.'
+      )
+    end
+
+    it 'returns a controlled error when preparation fails' do
+      allow(ReplyPreparations::PrepareReplyService).to receive(:new).and_return(prepare_service)
+      allow(prepare_service).to receive(:perform).and_raise(ReplyPreparations::PrepareReplyService::Error, 'Reply content is required')
+
+      post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/prepare_reply",
+           headers: agent.create_new_auth_token,
+           params: { content: '' },
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to eq('Reply content is required')
+    end
+  end
+
+  describe 'POST /api/v1/accounts/{account.id}/conversations/:id/summarize' do
+    let(:conversation) { create(:conversation, account: account) }
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let(:summary_service) { instance_double(ConversationSummaries::SummaryService, perform: 'Conversation summary') }
+
+    before do
+      create(:inbox_member, user: agent, inbox: conversation.inbox)
+    end
+
+    it 'summarizes a conversation for an authenticated operator without creating a message' do
+      allow(ConversationSummaries::SummaryService).to receive(:new).and_return(summary_service)
+
+      expect do
+        post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/summarize",
+             headers: agent.create_new_auth_token,
+             as: :json
+      end.not_to change(Message, :count)
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['content']).to eq('Conversation summary')
+      expect(ConversationSummaries::SummaryService).to have_received(:new).with(
+        conversation: conversation,
+        user: agent
+      )
+    end
+
+    it 'returns a controlled error when summarization fails' do
+      allow(ConversationSummaries::SummaryService).to receive(:new).and_return(summary_service)
+      allow(summary_service).to receive(:perform).and_raise(
+        ConversationSummaries::SummaryService::Error,
+        'No conversation messages available to summarize'
+      )
+
+      post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/summarize",
+           headers: agent.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to eq('No conversation messages available to summarize')
+    end
+  end
+
+  describe 'POST /api/v1/accounts/{account.id}/conversations/:id/knowledge_answer' do
+    let(:conversation) { create(:conversation, account: account) }
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let(:answer_service) { instance_double(KnowledgeAnswers::AnswerService, perform: 'Knowledge answer draft') }
+
+    before do
+      create(:inbox_member, user: agent, inbox: conversation.inbox)
+    end
+
+    it 'generates a knowledge answer for an authenticated operator without creating a message' do
+      allow(KnowledgeAnswers::AnswerService).to receive(:new).and_return(answer_service)
+
+      expect do
+        post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/knowledge_answer",
+             headers: agent.create_new_auth_token,
+             as: :json
+      end.not_to change(Message, :count)
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['content']).to eq('Knowledge answer draft')
+      expect(KnowledgeAnswers::AnswerService).to have_received(:new).with(
+        conversation: conversation,
+        user: agent
+      )
+    end
+
+    it 'returns a controlled error when knowledge answer generation fails' do
+      allow(KnowledgeAnswers::AnswerService).to receive(:new).and_return(answer_service)
+      allow(answer_service).to receive(:perform).and_raise(
+        KnowledgeAnswers::AnswerService::Error,
+        'Onyx MCP integration is not configured'
+      )
+
+      post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/knowledge_answer",
+           headers: agent.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to eq('Onyx MCP integration is not configured')
     end
   end
 

@@ -113,6 +113,7 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
+  has_many :assignment_events, class_name: 'ConversationAssignmentEvent', dependent: :destroy_async
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
@@ -284,7 +285,8 @@ class Conversation < ApplicationRecord
   def allowed_keys?
     (
       previous_changes.keys.intersect?(list_of_keys) ||
-      (previous_changes['additional_attributes'].present? && previous_changes['additional_attributes'][1].keys.intersect?(%w[conversation_language]))
+      (previous_changes['additional_attributes'].present? &&
+       previous_changes['additional_attributes'][1].keys.intersect?(%w[conversation_language customer_identity_suggestion]))
     )
   end
 

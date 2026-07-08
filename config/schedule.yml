@@ -61,6 +61,12 @@ periodic_assignment_job:
   class: 'AutoAssignment::PeriodicAssignmentJob'
   queue: scheduled_jobs
 
+# executed every minute to move off-shift team conversations back to assignment queue
+agent_shift_reassignment_job:
+  cron: '*/1 * * * *'
+  class: 'AgentSchedules::ShiftReassignmentJob'
+  queue: scheduled_jobs
+
 # executed daily at 2230 UTC
 # removes old notifications (>1 month) and trims to 300 per user
 remove_old_notification_job:

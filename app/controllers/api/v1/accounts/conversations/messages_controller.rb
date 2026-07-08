@@ -37,21 +37,17 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   end
 
   def translate
-    return head :ok if already_translated_content_available?
-
-    translated_content = Integrations::GoogleTranslate::ProcessorService.new(
+    translation = MessageTranslations::TranslateMessageService.new(
       message: message,
-      target_language: permitted_params[:target_language]
+      target_locale: translation_target_locale
     ).perform
 
-    if translated_content.present?
-      translations = {}
-      translations[permitted_params[:target_language]] = translated_content
-      translations = message.translations.merge!(translations) if message.translations.present?
-      message.update!(translations: translations)
-    end
-
-    render json: { content: translated_content }
+    render json: {
+      content: translation&.content,
+      operator_translation: translation&.push_event_data
+    }
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   private
@@ -68,8 +64,8 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     params.permit(:id, :target_language, :status, :external_error)
   end
 
-  def already_translated_content_available?
-    message.translations.present? && message.translations[permitted_params[:target_language]].present?
+  def translation_target_locale
+    permitted_params[:target_language].presence || Current.account_user&.translation_locale
   end
 
   # API inbox check

@@ -94,6 +94,28 @@ describe('#actions', () => {
         [types.SET_CURRENT_USER_AVAILABILITY, 'online'],
       ]);
     });
+
+    it('does not update availability when it is schedule-managed', async () => {
+      axios.post.mockClear();
+      commit.mockClear();
+      dispatch.mockClear();
+
+      await actions.updateAvailability(
+        {
+          commit,
+          dispatch,
+          getters: {
+            getCurrentUserAvailability: 'online',
+            getCurrentUserAvailabilitySource: 'schedule',
+          },
+        },
+        { availability: 'offline', account_id: 1 }
+      );
+
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('#updateAutoOffline', () => {

@@ -1,5 +1,5 @@
 class AutoAssignment::AssignmentService
-  pattr_initialize [:inbox!]
+  pattr_initialize [:inbox!, { statuses: ['open'] }]
 
   def perform_bulk_assignment(limit: 100)
     return 0 unless inbox.auto_assignment_v2_enabled?
@@ -26,12 +26,12 @@ class AutoAssignment::AssignmentService
   end
 
   def assignable?(conversation)
-    conversation.status == 'open' &&
+    statuses.include?(conversation.status) &&
       conversation.assignee_id.nil?
   end
 
   def unassigned_conversations(limit)
-    scope = inbox.conversations.unassigned.open
+    scope = inbox.conversations.unassigned.where(status: statuses)
 
     # Apply conversation priority using assignment policy if available
     policy = inbox.assignment_policy

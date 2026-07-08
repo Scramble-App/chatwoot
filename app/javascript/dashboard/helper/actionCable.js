@@ -15,6 +15,7 @@ class ActionCableConnector extends BaseActionCableConnector {
     this.events = {
       'message.created': this.onMessageCreated,
       'message.updated': this.onMessageUpdated,
+      'message.translation_updated': this.onMessageTranslationUpdated,
       'conversation.created': this.onConversationCreated,
       'conversation.status_changed': this.onStatusChange,
       'user:logout': this.onLogout,
@@ -54,6 +55,10 @@ class ActionCableConnector extends BaseActionCableConnector {
 
   onMessageUpdated = data => {
     this.app.$store.dispatch('updateMessage', data);
+  };
+
+  onMessageTranslationUpdated = data => {
+    this.app.$store.dispatch('updateMessageTranslation', data);
   };
 
   onPresenceUpdate = data => {

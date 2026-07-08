@@ -9680,6 +9680,42 @@
             "type": "object",
             "description": "The content attributes for each content_type"
           },
+          "operator_translation": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Operator-only translation for the current dashboard user.",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "message_id": {
+                "type": "integer"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "integer"
+              }
+            }
+          },
           "sender_type": {
             "type": [
               "string",
@@ -9902,6 +9938,22 @@
             "type": "boolean",
             "description": "Whether the availability status of agent is configured to go offline automatically when away."
           },
+          "availability_source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "schedule"
+            ],
+            "description": "Whether availability is controlled manually or by the agent schedule."
+          },
+          "schedule_enabled": {
+            "type": "boolean",
+            "description": "Whether the agent schedule controls availability."
+          },
+          "schedule_timezone": {
+            "type": "string",
+            "description": "Timezone used to evaluate the agent schedule."
+          },
           "confirmed": {
             "type": "boolean",
             "description": "Whether the agent has confirmed their email address."
@@ -9925,6 +9977,27 @@
               "administrator"
             ],
             "description": "The role of the agent"
+          },
+          "translation_locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Locale used for operator-only incoming message translations."
+          },
+          "working_hours": {
+            "type": "array",
+            "description": "Weekly schedule intervals for the agent.",
+            "items": {
+              "type": "object"
+            }
+          },
+          "schedule_exceptions": {
+            "type": "array",
+            "description": "One-off schedule exceptions for the agent.",
+            "items": {
+              "type": "object"
+            }
           },
           "thumbnail": {
             "type": "string",
@@ -10553,6 +10626,10 @@
           "allow_auto_assign": {
             "type": "boolean",
             "description": "If this setting is turned on, the system would automatically assign the conversation to an agent in the team while assigning the conversation to a team"
+          },
+          "reassign_on_shift_end": {
+            "type": "boolean",
+            "description": "If enabled, non-resolved conversations assigned to off-shift agents are moved back to the team assignment queue."
           },
           "account_id": {
             "type": "number",
@@ -11609,6 +11686,14 @@
             "type": "boolean",
             "description": "Whether the availability status of agent is configured to go offline automatically when away.",
             "example": true
+          },
+          "translation_locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Locale used for operator-only incoming message translations.",
+            "example": "en"
           }
         }
       },
@@ -11641,6 +11726,38 @@
             "type": "boolean",
             "description": "Whether the availability status of agent is configured to go offline automatically when away.",
             "example": true
+          },
+          "translation_locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Locale used for operator-only incoming message translations.",
+            "example": "en"
+          },
+          "schedule_enabled": {
+            "type": "boolean",
+            "description": "Whether the agent schedule controls availability.",
+            "example": false
+          },
+          "schedule_timezone": {
+            "type": "string",
+            "description": "Timezone used to evaluate the agent schedule.",
+            "example": "UTC"
+          },
+          "working_hours": {
+            "type": "array",
+            "description": "Weekly schedule intervals for the agent.",
+            "items": {
+              "type": "object"
+            }
+          },
+          "schedule_exceptions": {
+            "type": "array",
+            "description": "One-off schedule exceptions for the agent.",
+            "items": {
+              "type": "object"
+            }
           }
         }
       },
@@ -12262,6 +12379,11 @@
             "type": "boolean",
             "description": "If this setting is turned on, the system would automatically assign the conversation to an agent in the team while assigning the conversation to a team",
             "example": true
+          },
+          "reassign_on_shift_end": {
+            "type": "boolean",
+            "description": "Move non-resolved conversations back to the team queue when an agent shift ends.",
+            "example": false
           }
         }
       },
@@ -13756,6 +13878,42 @@
                   "null"
                 ],
                 "description": "ID of the message this is replying to"
+              }
+            }
+          },
+          "operator_translation": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Operator-only translation for the current dashboard user.",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "message_id": {
+                "type": "integer"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "integer"
               }
             }
           },

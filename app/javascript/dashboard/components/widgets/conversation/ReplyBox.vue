@@ -55,6 +55,7 @@ import { isFileTypeAllowedForChannel } from 'shared/helpers/FileHelper';
 
 import { LOCAL_STORAGE_KEYS } from 'dashboard/constants/localStorage';
 import { LocalStorage } from 'shared/helpers/localStorage';
+import { copyTextToClipboard } from 'shared/helpers/clipboard';
 import { emitter } from 'shared/helpers/mitt';
 const EmojiInput = defineAsyncComponent(
   () => import('shared/components/emoji/EmojiInput.vue')
@@ -134,6 +135,7 @@ export default {
       showArticleSearchPopover: false,
       hasRecordedAudio: false,
       copilotAcceptedMessages: {},
+      isPreparingReply: false,
     };
   },
   computed: {
@@ -424,6 +426,14 @@ export default {
         (this.isAWhatsAppChannel || this.isAPIInbox) &&
         !this.isOnPrivateNote &&
         !this.currentChat.can_reply
+      );
+    },
+    isPrepareReplyDisabled() {
+      return (
+        this.isEditorDisabled ||
+        this.isMessageEmpty ||
+        this.isPreparingReply ||
+        this.message.length > this.maxLength
       );
     },
   },
@@ -924,7 +934,34 @@ export default {
       this.onFocus();
     },
     executeCopilotAction(action, data) {
+      if (action === 'prepare_answer') {
+        this.prepareReply();
+        return;
+      }
+
       this.copilot.execute(action, data);
+    },
+    async prepareReply() {
+      if (this.isPrepareReplyDisabled) return;
+
+      this.isPreparingReply = true;
+      try {
+        const { content } = await this.$store.dispatch('prepareReply', {
+          conversationId: this.conversationId,
+          content: this.message,
+        });
+        if (content) {
+          this.message = trimContent(content, this.maxLength);
+          this.$nextTick(() => this.messageEditor?.focusEditorInputField());
+        }
+      } catch (error) {
+        const errorMessage =
+          error?.response?.data?.error ||
+          this.$t('CONVERSATION.REPLYBOX.PREPARE_ERROR');
+        useAlert(errorMessage);
+      } finally {
+        this.isPreparingReply = false;
+      }
     },
     clearMessage() {
       this.message = '';
@@ -1208,9 +1245,38 @@ export default {
       this.$nextTick(() => this.messageEditor?.focusEditorInputField());
     },
     onSubmitCopilotReply() {
+      const action = this.copilot.currentAction.value;
       const acceptedMessage = this.copilot.accept();
-      this.message = acceptedMessage;
+      if (action === 'summarize') {
+        const targetReplyType = REPLY_EDITOR_MODES.NOTE;
+        const trimmedMessage = trimContent(acceptedMessage, this.maxLength);
+        const draftKey = this.getDraftKey(
+          this.conversationIdByRoute,
+          targetReplyType
+        );
+
+        this.saveDraft(this.conversationIdByRoute, this.replyType);
+        this.$store.dispatch('draftMessages/set', {
+          key: draftKey,
+          message: trimmedMessage,
+        });
+        this.setCopilotAcceptedMessage(acceptedMessage, targetReplyType);
+        this.setReplyMode(targetReplyType);
+        this.$nextTick(() => {
+          this.message = trimmedMessage;
+          this.messageEditor?.focusEditorInputField();
+        });
+        return;
+      }
+      this.message = trimContent(acceptedMessage, this.maxLength);
       this.setCopilotAcceptedMessage(acceptedMessage);
+    },
+    async onCopyCopilotReply() {
+      const generatedContent = this.copilot.generatedContent.value;
+      if (!generatedContent) return;
+
+      await copyTextToClipboard(generatedContent);
+      useAlert(this.$t('CONVERSATION.REPLYBOX.COPILOT_COPY_SUCCESS'));
     },
   },
 };
@@ -1225,7 +1291,8 @@ export default {
       :is-reply-restricted="isReplyRestricted"
       :disabled="
         (copilot.isActive.value && copilot.isButtonDisabled.value) ||
-        showAudioRecorderEditor
+        showAudioRecorderEditor ||
+        isPreparingReply
       "
       :is-editor-disabled="isEditorDisabled"
       :is-message-length-reaching-threshold="isMessageLengthReachingThreshold"
@@ -1285,6 +1352,7 @@ export default {
           :show-copilot-editor="copilot.showEditor.value"
           :is-generating-content="copilot.isGenerating.value"
           :generated-content="copilot.generatedContent.value"
+          :show-follow-up="!!copilot.followUpContext.value"
           :placeholder="$t('CONVERSATION.FOOTER.COPILOT_MSG_INPUT')"
           @focus="onFocus"
           @blur="onBlur"
@@ -1366,6 +1434,7 @@ export default {
         key="copilot-bottom-panel"
         :is-generating-content="copilot.isButtonDisabled.value"
         @submit="onSubmitCopilotReply"
+        @copy="onCopyCopilotReply"
         @cancel="copilot.reset"
       />
       <ReplyBottomPanel

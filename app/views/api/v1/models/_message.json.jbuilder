@@ -13,4 +13,10 @@ json.source_id message.source_id
 json.sender message.sender.push_event_data if message.sender
 json.attachments message.attachments.map(&:push_event_data) if message.attachments.present?
 
+translation_locale = Current.account_user&.translation_locale
+if translation_locale.present?
+  translation = message.operator_translation_for(translation_locale)
+  json.operator_translation translation.push_event_data if translation
+end
+
 json.set! :call, message.call.push_event_data if message.content_type == 'voice_call' && message.respond_to?(:call) && message.call.present?

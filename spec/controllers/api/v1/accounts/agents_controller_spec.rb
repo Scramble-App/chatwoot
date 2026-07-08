@@ -129,7 +129,7 @@ RSpec.describe 'Agents API', type: :request do
 
       it 'modifies an agents account user attributes' do
         put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
-            params: { role: 'administrator', availability: 'busy', auto_offline: false },
+            params: { role: 'administrator', availability: 'busy', auto_offline: false, translation_locale: 'en' },
             headers: admin.create_new_auth_token,
             as: :json
 
@@ -138,7 +138,53 @@ RSpec.describe 'Agents API', type: :request do
         expect(response_data['role']).to eq('administrator')
         expect(response_data['availability_status']).to eq('busy')
         expect(response_data['auto_offline']).to be(false)
-        expect(other_agent.account_users.first.role).to eq('administrator')
+        expect(response_data['translation_locale']).to eq('en')
+        expect(other_agent.account_users.first).to have_attributes(role: 'administrator', translation_locale: 'en')
+      end
+
+      it 'clears an agents translation language' do
+        other_agent.account_users.first.update!(translation_locale: 'en')
+
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { translation_locale: nil },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['translation_locale']).to be_nil
+        expect(other_agent.account_users.first.reload.translation_locale).to be_nil
+      end
+
+      it 'updates an agent schedule' do
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: {
+              schedule_enabled: true,
+              schedule_timezone: 'UTC',
+              working_hours: [
+                { day_of_week: 1, open_hour: 9, open_minutes: 0, close_hour: 18, close_minutes: 0 }
+              ]
+            },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        account_user = other_agent.account_users.find_by!(account_id: account.id)
+        expect(account_user.reload.schedule_enabled).to be(true)
+        expect(account_user.working_hours.first).to have_attributes(day_of_week: 1, open_hour: 9, close_hour: 18)
+      end
+
+      it 'allows team leads to update schedules for their team members' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: agent, team_lead: true)
+        create(:team_member, team: team, user: other_agent)
+
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { schedule_enabled: true, schedule_timezone: 'UTC' },
+            headers: agent.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(other_agent.account_users.find_by!(account_id: account.id).reload.schedule_enabled).to be(true)
       end
     end
   end
@@ -168,13 +214,14 @@ RSpec.describe 'Agents API', type: :request do
 
       it 'creates a new agent' do
         post "/api/v1/accounts/#{account.id}/agents",
-             params: params,
+             params: params.merge(translation_locale: 'en'),
              headers: admin.create_new_auth_token,
              as: :json
 
         expect(response).to have_http_status(:success)
         expect(response).to conform_schema(200)
         expect(response.parsed_body['email']).to eq(params[:email])
+        expect(response.parsed_body['translation_locale']).to eq('en')
         expect(account.users.last.name).to eq('NewUser')
       end
     end

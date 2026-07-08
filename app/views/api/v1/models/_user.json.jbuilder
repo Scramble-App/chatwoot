@@ -31,6 +31,9 @@ json.accounts do
     # availability derived from presence
     json.availability_status account_user.availability_status
     json.auto_offline account_user.auto_offline
+    json.availability_source account_user.availability_source
+    json.schedule_enabled account_user.schedule_enabled?
+    json.schedule_timezone account_user.schedule_time_zone
     json.partial! 'api/v1/models/account_user', account_user: account_user if ChatwootApp.enterprise?
   end
 end

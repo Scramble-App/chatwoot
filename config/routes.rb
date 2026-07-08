@@ -142,6 +142,13 @@ Rails.application.routes.draw do
                   post :retry
                 end
               end
+              resource :reply_preparation, path: :prepare_reply, only: [:create]
+              resource :summary, path: :summarize, only: [:create]
+              resource :knowledge_answer, only: [:create]
+              resource :customer_identity_suggestion, only: [] do
+                post :link
+                post :dismiss
+              end
               resources :assignments, only: [:create]
               resources :labels, only: [:create, :index]
               resource :participants, only: [:show, :create, :update, :destroy]

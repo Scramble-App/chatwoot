@@ -11,7 +11,7 @@ class MessageFinder
   private
 
   def conversation_messages
-    @conversation.messages.includes(:attachments, :sender, sender: { avatar_attachment: [:blob] })
+    @conversation.messages.includes(:attachments, :message_translations, :sender, sender: { avatar_attachment: [:blob] })
   end
 
   def messages

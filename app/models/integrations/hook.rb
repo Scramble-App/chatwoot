@@ -65,6 +65,20 @@ class Integrations::Hook < ApplicationRecord
     app_id == 'notion'
   end
 
+  def sanitized_settings
+    settings.to_h.with_indifferent_access.except(*sensitive_properties)
+  end
+
+  def sensitive_settings_configured
+    sensitive_properties.each_with_object({}) do |property, result|
+      result["#{property}_configured"] = settings_value(property).present?
+    end
+  end
+
+  def sensitive_properties
+    app&.sensitive_properties || []
+  end
+
   def disable
     update(status: 'disabled')
   end
@@ -118,6 +132,10 @@ class Integrations::Hook < ApplicationRecord
 
   def settings_api_key(value)
     value&.dig('api_key') || value&.dig(:api_key)
+  end
+
+  def settings_value(property)
+    settings&.dig(property) || settings&.dig(property.to_sym)
   end
 
   def trigger_setup_if_crm

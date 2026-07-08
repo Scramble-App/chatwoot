@@ -35,12 +35,14 @@ export default {
       description = '',
       name: title = '',
       allow_auto_assign: allowAutoAssign = true,
+      reassign_on_shift_end: reassignOnShiftEnd = false,
     } = formData;
 
     const state = reactive({
       description,
       title,
       allowAutoAssign,
+      reassignOnShiftEnd,
     });
 
     const rules = validations;
@@ -57,6 +59,7 @@ export default {
         description: this.state.description,
         name: this.state.title,
         allow_auto_assign: this.state.allowAutoAssign,
+        reassign_on_shift_end: this.state.reassignOnShiftEnd,
       });
     },
   },
@@ -92,6 +95,16 @@ export default {
         <input v-model="state.allowAutoAssign" type="checkbox" :value="true" />
         <label for="conversation_creation">
           {{ $t('TEAMS_SETTINGS.FORM.AUTO_ASSIGN.LABEL') }}
+        </label>
+      </div>
+      <div class="w-full flex items-center gap-2">
+        <input
+          v-model="state.reassignOnShiftEnd"
+          type="checkbox"
+          :value="true"
+        />
+        <label for="shift_reassignment">
+          {{ $t('TEAMS_SETTINGS.FORM.SHIFT_REASSIGN.LABEL') }}
         </label>
       </div>
       <div class="flex flex-row justify-end gap-2 py-2 px-0 w-full">

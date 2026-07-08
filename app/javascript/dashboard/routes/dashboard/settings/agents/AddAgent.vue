@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
+import { useConfig } from 'dashboard/composables/useConfig';
 import { useVuelidate } from '@vuelidate/core';
 import { required, email } from '@vuelidate/validators';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -11,10 +12,12 @@ const emit = defineEmits(['close']);
 
 const store = useStore();
 const { t } = useI18n();
+const { enabledLanguages } = useConfig();
 
 const agentName = ref('');
 const agentEmail = ref('');
 const selectedRoleId = ref('agent');
+const selectedTranslationLocale = ref('');
 
 const rules = {
   agentName: { required },
@@ -61,6 +64,14 @@ const selectedRole = computed(() =>
   )
 );
 
+const languageOptions = computed(() => [
+  {
+    name: t('AGENT_MGMT.TRANSLATION_LANGUAGE.NONE'),
+    iso_639_1_code: '',
+  },
+  ...(enabledLanguages ?? []),
+]);
+
 const addAgent = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
@@ -69,6 +80,7 @@ const addAgent = async () => {
     const payload = {
       name: agentName.value,
       email: agentEmail.value,
+      translation_locale: selectedTranslationLocale.value || null,
     };
 
     if (selectedRole.value.name.startsWith('custom_')) {
@@ -144,6 +156,21 @@ const addAgent = async () => {
             :placeholder="$t('AGENT_MGMT.ADD.FORM.EMAIL.PLACEHOLDER')"
             @input="v$.agentEmail.$touch"
           />
+        </label>
+      </div>
+
+      <div class="w-full">
+        <label>
+          {{ $t('AGENT_MGMT.TRANSLATION_LANGUAGE.LABEL') }}
+          <select v-model="selectedTranslationLocale">
+            <option
+              v-for="language in languageOptions"
+              :key="language.iso_639_1_code || 'none'"
+              :value="language.iso_639_1_code"
+            >
+              {{ language.name }}
+            </option>
+          </select>
         </label>
       </div>
 

@@ -96,6 +96,40 @@ class ConversationApi extends ApiClient {
     return axios.post(`${this.url}/${conversationId}/unmute`);
   }
 
+  prepareReply({ conversationId, content }) {
+    return axios.post(`${this.url}/${conversationId}/prepare_reply`, {
+      content,
+    });
+  }
+
+  summarize(conversationId, signal) {
+    return axios.post(
+      `${this.url}/${conversationId}/summarize`,
+      {},
+      { signal }
+    );
+  }
+
+  knowledgeAnswer(conversationId, signal) {
+    return axios.post(
+      `${this.url}/${conversationId}/knowledge_answer`,
+      {},
+      { signal }
+    );
+  }
+
+  linkCustomerIdentitySuggestion({ conversationId }) {
+    return axios.post(
+      `${this.url}/${conversationId}/customer_identity_suggestion/link`
+    );
+  }
+
+  dismissCustomerIdentitySuggestion({ conversationId }) {
+    return axios.post(
+      `${this.url}/${conversationId}/customer_identity_suggestion/dismiss`
+    );
+  }
+
   meta({ inboxId, status, assigneeType, labels, teamId, conversationType }) {
     return axios.get(`${this.url}/meta`, {
       params: {

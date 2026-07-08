@@ -21,6 +21,14 @@ const props = defineProps({
     type: Function,
     default: () => {},
   },
+  teamLeadAgents: {
+    type: Array,
+    default: () => [],
+  },
+  updateTeamLeadAgents: {
+    type: Function,
+    default: () => {},
+  },
   isWorking: {
     type: Boolean,
     default: false,
@@ -51,12 +59,19 @@ const isAgentSelected = agentId => {
   return props.selectedAgents.includes(agentId);
 };
 
+const isTeamLead = agentId => {
+  return props.teamLeadAgents.includes(agentId);
+};
+
 const handleSelectAgent = agentId => {
   const shouldRemove = isAgentSelected(agentId);
 
   let result = [];
   if (shouldRemove) {
     result = props.selectedAgents.filter(item => item !== agentId);
+    props.updateTeamLeadAgents(
+      props.teamLeadAgents.filter(item => item !== agentId)
+    );
   } else {
     result = [...props.selectedAgents, agentId];
   }
@@ -64,9 +79,20 @@ const handleSelectAgent = agentId => {
   props.updateSelectedAgents(result);
 };
 
+const handleSelectTeamLead = agentId => {
+  if (!isAgentSelected(agentId)) return;
+
+  const result = isTeamLead(agentId)
+    ? props.teamLeadAgents.filter(item => item !== agentId)
+    : [...props.teamLeadAgents, agentId];
+
+  props.updateTeamLeadAgents(result);
+};
+
 const toggleSelectAll = () => {
   if (allAgentsSelected.value) {
     props.updateSelectedAgents([]);
+    props.updateTeamLeadAgents([]);
   } else {
     const result = props.agentList.map(item => item.id);
     props.updateSelectedAgents(result);
@@ -77,6 +103,7 @@ const headers = computed(() => [
   '',
   t('TEAMS_SETTINGS.AGENTS.AGENT'),
   t('TEAMS_SETTINGS.AGENTS.EMAIL'),
+  t('TEAMS_SETTINGS.AGENTS.TEAM_LEAD'),
 ]);
 </script>
 
@@ -126,6 +153,15 @@ const headers = computed(() => [
             <span class="text-body-main text-n-slate-11 truncate block">
               {{ agent.email || '---' }}
             </span>
+          </BaseTableCell>
+
+          <BaseTableCell class="w-24">
+            <Checkbox
+              :model-value="isTeamLead(agent.id)"
+              :disabled="!isAgentSelected(agent.id)"
+              :title="$t('TEAMS_SETTINGS.AGENTS.TEAM_LEAD')"
+              @change="() => handleSelectTeamLead(agent.id)"
+            />
           </BaseTableCell>
         </template>
       </BaseTableRow>

@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue';
-import { useCaptain } from 'dashboard/composables/useCaptain';
-import { useUISettings } from 'dashboard/composables/useUISettings';
-import { useTrack } from 'dashboard/composables';
+import ConversationApi from 'dashboard/api/inbox/conversation';
+import { useMapGetter } from 'dashboard/composables/store.js';
+import { useAlert, useTrack } from 'dashboard/composables';
 import { CAPTAIN_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import {
   CAPTAIN_ERROR_TYPES,
@@ -29,6 +29,7 @@ const REWRITE_ACTIONS = [
  */
 function getEventPrefix(action) {
   if (action === 'summarize') return 'SUMMARIZE';
+  if (action === 'knowledge_answer') return 'REPLY_SUGGESTION';
   if (action === 'reply_suggestion') return 'REPLY_SUGGESTION';
   return 'REWRITE';
 }
@@ -77,8 +78,7 @@ function trackGenerationFailure({
  * @returns {Object} Copilot reply state and methods
  */
 export function useCopilotReply() {
-  const { processEvent, followUp, currentChat } = useCaptain();
-  const { updateUISettings } = useUISettings();
+  const currentChat = useMapGetter('getSelectedChat');
 
   const showEditor = ref(false);
   const isGenerating = ref(false);
@@ -148,20 +148,66 @@ export function useCopilotReply() {
     isContentReady.value = true;
   }
 
+  const handleAPIError = error => {
+    if (
+      error.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
+      error.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
+    ) {
+      return;
+    }
+
+    const errorMessage =
+      error.response?.data?.error ||
+      error.response?.data?.errors?.[0] ||
+      'Failed to generate content. Please try again.';
+    useAlert(errorMessage);
+  };
+
+  const getErrorType = error => {
+    if (
+      error.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
+      error.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
+    ) {
+      return CAPTAIN_ERROR_TYPES.ABORTED;
+    }
+    if (error.response?.status) {
+      return `${CAPTAIN_ERROR_TYPES.HTTP_PREFIX}${error.response.status}`;
+    }
+    return CAPTAIN_ERROR_TYPES.API_ERROR;
+  };
+
+  const processEvent = async (type, options = {}) => {
+    if (!['summarize', 'knowledge_answer'].includes(type)) {
+      return {
+        message: '',
+        errorType: CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
+      };
+    }
+
+    try {
+      const { data } =
+        type === 'knowledge_answer'
+          ? await ConversationApi.knowledgeAnswer(
+              conversationId.value,
+              options.signal
+            )
+          : await ConversationApi.summarize(
+              conversationId.value,
+              options.signal
+            );
+      return { message: data.content };
+    } catch (error) {
+      handleAPIError(error);
+      return { message: '', errorType: getErrorType(error) };
+    }
+  };
+
   /**
    * Executes a copilot action (e.g., improve, fix grammar).
    * @param {string} action - The action type
    * @param {string} data - The content to process
    */
-  async function execute(action, data) {
-    if (action === 'ask_copilot') {
-      updateUISettings({
-        is_contact_sidebar_open: false,
-        is_copilot_panel_open: true,
-      });
-      return;
-    }
-
+  async function execute(action) {
     // Reset without tracking dismiss (starting new action)
     reset(false);
     const requestController = new AbortController();
@@ -177,7 +223,7 @@ export function useCopilotReply() {
         message: content,
         followUpContext: newContext,
         errorType,
-      } = await processEvent(action, data, {
+      } = await processEvent(action, {
         signal: requestController.signal,
       });
 
@@ -256,15 +302,9 @@ export function useCopilotReply() {
     followUpCount.value += 1;
 
     try {
-      const {
-        message: content,
-        followUpContext: updatedContext,
-        errorType,
-      } = await followUp({
-        followUpContext: followUpContext.value,
-        message,
-        signal: requestController.signal,
-      });
+      const content = '';
+      const updatedContext = followUpContext.value;
+      const errorType = CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE;
 
       if (requestController.signal.aborted) return;
       if (errorType === CAPTAIN_ERROR_TYPES.ABORTED) {
@@ -358,6 +398,7 @@ export function useCopilotReply() {
     isContentReady,
     generatedContent,
     followUpContext,
+    currentAction,
 
     isActive,
     isButtonDisabled,

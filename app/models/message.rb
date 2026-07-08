@@ -133,6 +133,7 @@ class Message < ApplicationRecord
   has_many :attachments, dependent: :destroy, autosave: true, before_add: :validate_attachments_limit
   has_one :csat_survey_response, dependent: :destroy_async
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
+  has_many :message_translations, dependent: :destroy_async
 
   after_create_commit :execute_after_create_commit_callbacks
 
@@ -153,6 +154,36 @@ class Message < ApplicationRecord
     data[:echo_id] = echo_id if echo_id.present?
     data[:attachments] = attachments.map(&:push_event_data) if attachments.present?
     merge_sender_attributes(data)
+  end
+
+  def push_event_data_with_operator_translation(account_user)
+    push_event_data.tap { |data| merge_operator_translation(data, account_user) }
+  end
+
+  def operator_translation_for(target_locale)
+    return if target_locale.blank?
+
+    if message_translations.loaded?
+      return message_translations.find do |translation|
+        operator_translation_matches?(translation, target_locale)
+      end
+    end
+
+    message_translations.completed.find_by(
+      target_locale: target_locale,
+      provider: MessageTranslation::PROVIDER_OPENAI
+    )
+  end
+
+  def merge_operator_translation(data, account_user)
+    operator_translation = operator_translation_for(account_user&.translation_locale)
+    data[:operator_translation] = operator_translation.push_event_data if operator_translation
+  end
+
+  def operator_translation_matches?(translation, target_locale)
+    translation.target_locale == target_locale &&
+      translation.provider == MessageTranslation::PROVIDER_OPENAI &&
+      translation.completed?
   end
 
   def conversation_push_event_data

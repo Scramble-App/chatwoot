@@ -116,7 +116,7 @@ RSpec.describe 'Teams API', type: :request do
       end
 
       it 'updates an existing team when its an administrator' do
-        params = { name: 'new-team' }
+        params = { name: 'new-team', reassign_on_shift_end: true }
 
         put "/api/v1/accounts/#{account.id}/teams/#{team.id}",
             params: params,
@@ -126,6 +126,7 @@ RSpec.describe 'Teams API', type: :request do
         expect(response).to have_http_status(:success)
         expect(response).to conform_schema(200)
         expect(team.reload.name).to eq('new-team')
+        expect(team.reassign_on_shift_end).to be(true)
       end
     end
   end

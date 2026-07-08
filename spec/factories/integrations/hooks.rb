@@ -27,6 +27,11 @@ FactoryBot.define do
       settings { { api_key: 'api_key' } }
     end
 
+    trait :onyx_mcp do
+      app_id { 'onyx_mcp' }
+      settings { { mcp_url: 'https://cloud.onyx.app/mcp', api_token: 'onyx-token' } }
+    end
+
     trait :linear do
       app_id { 'linear' }
       access_token { SecureRandom.hex }

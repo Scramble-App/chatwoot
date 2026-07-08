@@ -18,6 +18,14 @@ export default {
       type: String,
       required: true,
     },
+    hook: {
+      type: Object,
+      default: null,
+    },
+    mode: {
+      type: String,
+      default: 'create',
+    },
   },
   emits: ['close'],
   setup(props) {
@@ -57,8 +65,28 @@ export default {
       }
       return this.integration.hooks.map(hook => hook.inbox?.id);
     },
+    isEditMode() {
+      return this.mode === 'edit' && this.hook?.id;
+    },
+    sensitiveProperties() {
+      return this.integration.sensitive_properties || [];
+    },
     formItems() {
-      return this.integration.settings_form_schema;
+      const items = this.integration.settings_form_schema || [];
+      if (!this.isEditMode) return items;
+
+      return items.map(item => {
+        if (!this.sensitiveProperties.includes(item.name)) return item;
+
+        const nextItem = {
+          ...item,
+          label: item.editLabel || `New ${item.label}`,
+          help: item.editHelp || item.help,
+          validation: item.editValidation || '',
+        };
+        delete nextItem.value;
+        return nextItem;
+      });
     },
     isIntegrationDialogflow() {
       return this.integration.id === 'dialogflow';
@@ -68,8 +96,20 @@ export default {
         return this.$t('INTEGRATION_APPS.ADD.FORM.VALIDATING_OPENAI');
       }
 
-      return this.$t('INTEGRATION_APPS.ADD.FORM.SUBMIT');
+      return this.isEditMode
+        ? this.$t('INTEGRATION_APPS.EDIT.FORM.SUBMIT')
+        : this.$t('INTEGRATION_APPS.ADD.FORM.SUBMIT');
     },
+    submitButtonLoading() {
+      return this.uiFlags.isCreatingHook || this.uiFlags.isUpdatingHook;
+    },
+  },
+  mounted() {
+    if (!this.isEditMode) return;
+
+    this.values = {
+      ...(this.hook.settings || {}),
+    };
   },
   methods: {
     onClose() {
@@ -83,6 +123,13 @@ export default {
 
       hookPayload.settings = Object.keys(this.values).reduce((acc, key) => {
         if (key !== 'inbox') {
+          if (
+            this.isEditMode &&
+            this.sensitiveProperties.includes(key) &&
+            !this.values[key]
+          ) {
+            return acc;
+          }
           acc[key] = this.values[key];
         }
         return acc;
@@ -104,16 +151,32 @@ export default {
     },
     async submitForm() {
       try {
-        await this.$store.dispatch(
-          'integrations/createHook',
-          this.buildHookPayload()
-        );
-        this.alertMessage = this.$t('INTEGRATION_APPS.ADD.API.SUCCESS_MESSAGE');
+        if (this.isEditMode) {
+          await this.$store.dispatch('integrations/updateHook', {
+            hookId: this.hook.id,
+            hookData: this.buildHookPayload(),
+          });
+          this.alertMessage = this.$t(
+            'INTEGRATION_APPS.EDIT.API.SUCCESS_MESSAGE'
+          );
+        } else {
+          await this.$store.dispatch(
+            'integrations/createHook',
+            this.buildHookPayload()
+          );
+          this.alertMessage = this.$t(
+            'INTEGRATION_APPS.ADD.API.SUCCESS_MESSAGE'
+          );
+        }
         this.onClose();
       } catch (error) {
-        const errorMessage = error?.response?.data?.message;
+        const errorMessage =
+          error?.response?.data?.message || error?.response?.data?.error;
         this.alertMessage =
-          errorMessage || this.$t('INTEGRATION_APPS.ADD.API.ERROR_MESSAGE');
+          errorMessage ||
+          (this.isEditMode
+            ? this.$t('INTEGRATION_APPS.EDIT.API.ERROR_MESSAGE')
+            : this.$t('INTEGRATION_APPS.ADD.API.ERROR_MESSAGE'));
       } finally {
         useAlert(this.alertMessage);
       }
@@ -162,7 +225,7 @@ export default {
         <NextButton
           type="submit"
           :label="submitButtonLabel"
-          :is-loading="uiFlags.isCreatingHook"
+          :is-loading="submitButtonLoading"
         />
       </div>
     </FormKit>

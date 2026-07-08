@@ -29,6 +29,7 @@ openai:
   action: /openai
   hook_type: account
   allow_multiple_hooks: false
+  sensitive_properties: ['api_key']
   settings_json_schema:
     {
       'type': 'object',
@@ -36,6 +37,20 @@ openai:
         {
           'api_key': { 'type': 'string' },
           'label_suggestion': { 'type': 'boolean' },
+          'translation_enabled': { 'type': 'boolean' },
+          'auto_translate_incoming': { 'type': 'boolean' },
+          'translation_model': { 'type': 'string' },
+          'translation_reasoning_effort':
+            {
+              'type': 'string',
+              'enum': ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+            },
+          'translation_max_output_tokens': { 'type': ['integer', 'string'] },
+          'translation_temperature': { 'type': ['number', 'string'] },
+          'reply_tone_instructions': { 'type': 'string' },
+          'translation_instructions': { 'type': 'string' },
+          'prepare_answer_instructions': { 'type': 'string' },
+          'summary_instructions': { 'type': 'string' },
         },
       'required': ['api_key'],
       'additionalProperties': false,
@@ -47,6 +62,8 @@ openai:
         'type': 'text',
         'name': 'api_key',
         'validation': 'required',
+        'editLabel': 'New API Key',
+        'editHelp': 'Leave blank to keep the existing API key.',
       },
       {
         'label': 'Show label suggestions',
@@ -54,8 +71,181 @@ openai:
         'name': 'label_suggestion',
         'validation': '',
       },
+      {
+        'label': 'Enable operator message translations',
+        'type': 'checkbox',
+        'name': 'translation_enabled',
+        'validation': '',
+      },
+      {
+        'label': 'Auto translate incoming messages',
+        'type': 'checkbox',
+        'name': 'auto_translate_incoming',
+        'validation': '',
+      },
+      {
+        'label': 'Translation model',
+        'type': 'text',
+        'name': 'translation_model',
+        'placeholder': 'gpt-4.1-mini',
+        'help': 'OpenAI model used for operator-only incoming message translations',
+      },
+      {
+        'label': 'Translation reasoning effort',
+        'type': 'select',
+        'name': 'translation_reasoning_effort',
+        'default': 'none',
+        'options': [
+          { 'label': 'None', 'value': 'none' },
+          { 'label': 'Minimal', 'value': 'minimal' },
+          { 'label': 'Low', 'value': 'low' },
+          { 'label': 'Medium', 'value': 'medium' },
+          { 'label': 'High', 'value': 'high' },
+          { 'label': 'Extra high', 'value': 'xhigh' },
+        ],
+      },
+      {
+        'label': 'Translation max output tokens',
+        'type': 'number',
+        'name': 'translation_max_output_tokens',
+        'help': 'Default is 1200',
+      },
+      {
+        'label': 'Translation temperature',
+        'type': 'number',
+        'name': 'translation_temperature',
+        'help': 'Default is 0.2',
+      },
+      {
+        'label': 'Reply tone instructions',
+        'type': 'textarea',
+        'name': 'reply_tone_instructions',
+        'placeholder': 'Professional, clear, concise, friendly support tone.',
+        'help': 'Shared tone instructions for Prepare, Summary, and knowledge answers',
+      },
+      {
+        'label': 'Translation instructions',
+        'type': 'textarea',
+        'name': 'translation_instructions',
+        'placeholder': 'Translate customer support messages into the requested target language. Preserve URLs, email addresses, names, code, placeholders, and line breaks where possible. Return only the translated message text.',
+        'help': 'Used for operator-only incoming message translations',
+      },
+      {
+        'label': 'Prepare answer instructions',
+        'type': 'textarea',
+        'name': 'prepare_answer_instructions',
+        'placeholder': 'Prepare operator replies for customer support conversations. Detect the customer language from the customer message context and translate the operator draft into that language. Apply the configured tone of voice without changing the factual meaning of the draft. Preserve URLs, email addresses, names, code, markdown links, variables, placeholders, and line breaks where possible. Do not add facts, promises, greetings, signatures, or explanations that are not present in the operator draft. Return only the final prepared reply text.',
+        'help': 'Used by Prepare answer before the operator sends a reply',
+      },
+      {
+        'label': 'Summary instructions',
+        'type': 'textarea',
+        'name': 'summary_instructions',
+        'placeholder': 'Summarize customer support conversations for internal operator handoff. Group separate customer issues as Question 1, Question 2, and so on, using equivalent headings in the output language. For each question, include: customer problem, agent replies or internal actions, result or current status, and recommended next step. Treat "Agent reply to customer" as a public response sent to the customer. Treat "Internal private note" as internal support work only; do not describe it as a customer-facing reply. Do not say support actions were not recorded when the context contains an Agent reply to customer or an Internal private note. Do not invent facts, promises, names, dates, or decisions that are not present in the conversation context.',
+        'help': 'Used by Summarize conversation; output language is enforced automatically from the operator language',
+      },
     ]
-  visible_properties: ['api_key', 'label_suggestion']
+  visible_properties:
+    [
+      'label_suggestion',
+      'translation_enabled',
+      'auto_translate_incoming',
+      'translation_model',
+      'translation_reasoning_effort',
+      'translation_max_output_tokens',
+      'translation_temperature',
+      'reply_tone_instructions',
+      'translation_instructions',
+      'prepare_answer_instructions',
+      'summary_instructions',
+    ]
+onyx_mcp:
+  id: onyx_mcp
+  logo: onyx.png
+  i18n_key: onyx_mcp
+  action: /onyx_mcp
+  hook_type: account
+  allow_multiple_hooks: false
+  sensitive_properties: ['api_token']
+  settings_json_schema:
+    {
+      'type': 'object',
+      'properties':
+        {
+          'mcp_url': { 'type': 'string' },
+          'api_token': { 'type': 'string' },
+          'source_types': { 'type': 'string' },
+          'result_limit': { 'type': ['integer', 'string'] },
+          'query_template': { 'type': 'string' },
+          'answer_guardrails': { 'type': 'string' },
+          'reply_tone_instructions': { 'type': 'string' },
+        },
+      'required': ['mcp_url', 'api_token'],
+      'additionalProperties': false,
+    }
+  settings_form_schema:
+    [
+      {
+        'label': 'MCP URL',
+        'type': 'text',
+        'name': 'mcp_url',
+        'validation': 'required',
+        'placeholder': 'https://cloud.onyx.app/mcp',
+        'help': 'Onyx MCP Streamable HTTP endpoint',
+      },
+      {
+        'label': 'API Token',
+        'type': 'text',
+        'name': 'api_token',
+        'validation': 'required',
+        'editLabel': 'New API Token',
+        'editHelp': 'Leave blank to keep the existing Onyx token.',
+      },
+      {
+        'label': 'Source types',
+        'type': 'text',
+        'name': 'source_types',
+        'placeholder': 'confluence,google_drive,jira',
+        'help': 'Optional comma-separated Onyx source type filters',
+      },
+      {
+        'label': 'Result limit',
+        'type': 'number',
+        'name': 'result_limit',
+        'placeholder': '5',
+        'help': 'Maximum indexed document chunks to retrieve from Onyx',
+      },
+      {
+        'label': 'Query template',
+        'type': 'textarea',
+        'name': 'query_template',
+        'placeholder': 'Please help answer the customer support question. Conversation:\n{{conversation_context}}',
+        'help': 'Use {{conversation_context}} where the public conversation should be inserted',
+      },
+      {
+        'label': 'Guardrails',
+        'type': 'textarea',
+        'name': 'answer_guardrails',
+        'placeholder': 'Use only the provided knowledge base excerpts. Do not invent facts. If the answer is not covered, say what is missing and suggest the agent verify internally.',
+        'help': 'Passed to OpenAI when preparing a knowledge-base answer',
+      },
+      {
+        'label': 'Reply tone instructions',
+        'type': 'textarea',
+        'name': 'reply_tone_instructions',
+        'placeholder': 'Professional, clear, concise, friendly support tone.',
+        'help': 'Passed to OpenAI when preparing a knowledge-base answer',
+      },
+    ]
+  visible_properties:
+    [
+      'mcp_url',
+      'source_types',
+      'result_limit',
+      'query_template',
+      'answer_guardrails',
+      'reply_tone_instructions',
+    ]
 linear:
   id: linear
   logo: linear.png

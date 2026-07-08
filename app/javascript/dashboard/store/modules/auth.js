@@ -41,7 +41,15 @@ export const getters = {
     const [currentAccount = {}] = accounts.filter(
       account => account.id === $getters.getCurrentAccountId
     );
-    return currentAccount.availability;
+    return currentAccount.availability_status || currentAccount.availability;
+  },
+
+  getCurrentUserAvailabilitySource($state, $getters) {
+    const { accounts = [] } = $state.currentUser;
+    const [currentAccount = {}] = accounts.filter(
+      account => account.id === $getters.getCurrentAccountId
+    );
+    return currentAccount.availability_source || 'manual';
   },
 
   getCurrentUserAutoOffline($state, $getters) {
@@ -175,6 +183,10 @@ export const actions = {
     { commit, dispatch, getters: _getters },
     params
   ) => {
+    if (_getters.getCurrentUserAvailabilitySource === 'schedule') {
+      return;
+    }
+
     const previousStatus = _getters.getCurrentUserAvailability;
 
     try {

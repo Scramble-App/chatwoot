@@ -120,6 +120,48 @@ describe('#actions', () => {
     });
   });
 
+  describe('#linkCustomerIdentitySuggestion', () => {
+    it('updates the conversation after linking a suggestion', async () => {
+      const conversation = {
+        id: 1,
+        labels: [],
+        meta: { sender: { id: 1, name: 'john-doe' } },
+      };
+      axios.post.mockResolvedValue({ data: conversation });
+
+      await actions.linkCustomerIdentitySuggestion(
+        { dispatch },
+        { conversationId: 1 }
+      );
+
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/v1/conversations/1/customer_identity_suggestion/link'
+      );
+      expect(dispatch).toHaveBeenCalledWith('updateConversation', conversation);
+    });
+  });
+
+  describe('#dismissCustomerIdentitySuggestion', () => {
+    it('updates the conversation after dismissing a suggestion', async () => {
+      const conversation = {
+        id: 1,
+        labels: [],
+        meta: { sender: { id: 1, name: 'john-doe' } },
+      };
+      axios.post.mockResolvedValue({ data: conversation });
+
+      await actions.dismissCustomerIdentitySuggestion(
+        { dispatch },
+        { conversationId: 1 }
+      );
+
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/v1/conversations/1/customer_identity_suggestion/dismiss'
+      );
+      expect(dispatch).toHaveBeenCalledWith('updateConversation', conversation);
+    });
+  });
+
   describe('#addConversation', () => {
     it('doesnot send mutation if conversation is from a different inbox', () => {
       const conversation = {

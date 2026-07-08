@@ -23,6 +23,10 @@ const props = defineProps({
     default: 'Give copilot additional prompts, or ask anything else...',
   },
   generatedContent: { type: String, default: '' },
+  showFollowUp: {
+    type: Boolean,
+    default: true,
+  },
   autofocus: {
     type: Boolean,
     default: true,
@@ -83,6 +87,8 @@ function contentFromEditor() {
 }
 
 function focusEditorInputField() {
+  if (!editorView) return;
+
   const { tr } = editorView.state;
   const selection = Selection.atEnd(tr.doc);
 
@@ -137,6 +143,8 @@ const enabledMenuOptions = computed(() => {
 });
 
 function reloadState() {
+  if (!editorView || !props.showFollowUp) return;
+
   state = createState(
     props.modelValue,
     props.placeholder,
@@ -186,6 +194,8 @@ watch(
 
 // lifecycle
 onMounted(() => {
+  if (!props.showFollowUp) return;
+
   state = createState(
     props.modelValue,
     props.placeholder,
@@ -210,7 +220,10 @@ onMounted(() => {
         class="text-n-iris-12 text-sm prose-sm font-normal !mb-4"
       />
     </div>
-    <div class="editor-root relative editor--copilot space-x-2">
+    <div
+      v-if="showFollowUp"
+      class="editor-root relative editor--copilot space-x-2"
+    >
       <div ref="editor" />
       <div class="flex items-center justify-end absolute right-2 bottom-2">
         <NextButton

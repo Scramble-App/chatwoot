@@ -16,6 +16,10 @@ defineProps({
     type: String,
     default: '',
   },
+  showFollowUp: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
@@ -63,6 +67,7 @@ const onSend = () => {
       v-model="copilotEditorContent"
       class="copilot-editor"
       :generated-content="generatedContent"
+      :show-follow-up="showFollowUp"
       :min-height="4"
       :enabled-menu-options="[]"
       @focus="onFocus"

@@ -68,7 +68,7 @@ RSpec.describe 'Integration Apps API', type: :request do
         end
       end
 
-      it 'will return sensitive information for openai app for admins' do
+      it 'will return editable non-sensitive settings for openai app for admins' do
         openai = create(:integrations_hook, :openai, account: account)
         get api_v1_account_integrations_apps_url(account),
             headers: admin.create_new_auth_token,
@@ -78,6 +78,8 @@ RSpec.describe 'Integration Apps API', type: :request do
 
         app = response.parsed_body['payload'].find { |int_app| int_app['id'] == openai.app.id }
         expect(app['hooks'].first['settings']).not_to be_nil
+        expect(app['hooks'].first['settings']).not_to have_key('api_key')
+        expect(app['hooks'].first['sensitive_settings_configured']['api_key_configured']).to be true
       end
     end
   end
@@ -117,7 +119,7 @@ RSpec.describe 'Integration Apps API', type: :request do
         expect(app['hooks'].first['settings']).to be_nil
       end
 
-      it 'will return sensitive information for openai app for admins' do
+      it 'will return editable non-sensitive settings for openai app for admins' do
         openai = create(:integrations_hook, :openai, account: account)
         get api_v1_account_integrations_app_url(account_id: account.id, id: openai.app.id),
             headers: admin.create_new_auth_token,
@@ -127,6 +129,8 @@ RSpec.describe 'Integration Apps API', type: :request do
 
         app = response.parsed_body
         expect(app['hooks'].first['settings']).not_to be_nil
+        expect(app['hooks'].first['settings']).not_to have_key('api_key')
+        expect(app['hooks'].first['sensitive_settings_configured']['api_key_configured']).to be true
       end
     end
   end

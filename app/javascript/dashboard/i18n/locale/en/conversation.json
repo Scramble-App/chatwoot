@@ -41,6 +41,13 @@
     "BOT_HANDOFF_REOPEN_ACTION": "Mark conversation open",
     "BOT_HANDOFF_SUCCESS": "Conversation has been handed over to you",
     "BOT_HANDOFF_ERROR": "Failed to take over the conversation. Please try again.",
+    "CUSTOMER_IDENTITY_SUGGESTION": {
+      "MESSAGE": "Found a customer by email: {customer}",
+      "LINK": "Link",
+      "DISMISS": "Dismiss",
+      "LINK_SUCCESS": "Customer linked to this conversation",
+      "ERROR": "Could not update customer link suggestion"
+    },
     "TWILIO_WHATSAPP_CAN_REPLY": "You can only reply to this conversation using a template message due to",
     "TWILIO_WHATSAPP_24_HOURS_WINDOW": "24 hour message window restriction",
     "OLD_INSTAGRAM_INBOX_REPLY_BANNER": "This Instagram account was migrated to the new Instagram channel inbox. All new messages will show up there. You won’t be able to send messages from this conversation anymore.",
@@ -69,6 +76,9 @@
     "RATING_TITLE": "Rating",
     "FEEDBACK_TITLE": "Feedback",
     "REPLY_MESSAGE_NOT_FOUND": "Message not available",
+    "OPERATOR_TRANSLATION": {
+      "LABEL": "Translation"
+    },
     "CARD": {
       "SHOW_LABELS": "Show labels",
       "HIDE_LABELS": "Hide labels",
@@ -212,6 +222,7 @@
       "REPLYING_TO": "Replying to:",
       "TIP_EMOJI_ICON": "Show emoji selector",
       "TIP_ATTACH_ICON": "Attach files",
+      "PREPARE_ERROR": "Couldn't prepare this reply. Please try again.",
       "TIP_AUDIORECORDER_ICON": "Record audio",
       "TIP_AUDIORECORDER_PERMISSION": "Allow access to audio",
       "TIP_AUDIORECORDER_ERROR": "Could not open the audio",
@@ -219,6 +230,7 @@
       "START_AUDIO_RECORDING": "Start audio recording",
       "STOP_AUDIO_RECORDING": "Stop audio recording",
       "COPILOT_THINKING": "Copilot is thinking",
+      "COPILOT_COPY_SUCCESS": "Summary copied to clipboard",
       "EMAIL_HEAD": {
         "TO": "TO",
         "ADD_BCC": "Add bcc",

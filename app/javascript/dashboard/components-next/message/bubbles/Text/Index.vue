@@ -8,15 +8,31 @@ import { MESSAGE_TYPES } from '../../constants';
 import { useMessageContext } from '../../provider.js';
 import { useTranslations } from 'dashboard/composables/useTranslations';
 
-const { content, attachments, contentAttributes, messageType } =
-  useMessageContext();
+const {
+  content,
+  attachments,
+  contentAttributes,
+  messageType,
+  operatorTranslation,
+} = useMessageContext();
 
 const { hasTranslations, translationContent } =
   useTranslations(contentAttributes);
 
 const renderOriginal = ref(false);
 
+const hasOperatorTranslation = computed(() => {
+  return (
+    messageType.value === MESSAGE_TYPES.INCOMING &&
+    operatorTranslation.value?.content
+  );
+});
+
 const renderContent = computed(() => {
+  if (hasOperatorTranslation.value) {
+    return content.value;
+  }
+
   if (renderOriginal.value) {
     return content.value;
   }
@@ -48,8 +64,17 @@ const handleSeeOriginal = () => {
         {{ $t('CONVERSATION.NO_CONTENT') }}
       </span>
       <FormattedContent v-if="renderContent" :content="renderContent" />
+      <div
+        v-if="hasOperatorTranslation"
+        class="rounded-md border border-n-weak bg-n-alpha-2 px-3 py-2 text-n-slate-12"
+      >
+        <div class="mb-1 text-xs font-medium uppercase text-n-slate-11">
+          {{ $t('CONVERSATION.OPERATOR_TRANSLATION.LABEL') }}
+        </div>
+        <FormattedContent :content="operatorTranslation.content" />
+      </div>
       <TranslationToggle
-        v-if="hasTranslations"
+        v-if="hasTranslations && !hasOperatorTranslation"
         class="-mt-3"
         :showing-original="renderOriginal"
         @toggle="handleSeeOriginal"

@@ -16,8 +16,13 @@ import { useMessageContext } from '../../provider.js';
 import { MESSAGE_TYPES } from 'next/message/constants.js';
 import { useTranslations } from 'dashboard/composables/useTranslations';
 
-const { content, contentAttributes, attachments, messageType } =
-  useMessageContext();
+const {
+  content,
+  contentAttributes,
+  attachments,
+  messageType,
+  operatorTranslation,
+} = useMessageContext();
 
 const isExpandable = ref(false);
 const isExpanded = ref(false);
@@ -34,6 +39,21 @@ const isIncoming = computed(() => !isOutgoing.value);
 
 const { hasTranslations, translationContent } =
   useTranslations(contentAttributes);
+
+const hasOperatorTranslation = computed(() => {
+  return (
+    messageType.value === MESSAGE_TYPES.INCOMING &&
+    operatorTranslation.value?.content
+  );
+});
+
+const shouldUseLegacyTranslation = computed(() => {
+  return (
+    hasTranslations.value &&
+    !hasOperatorTranslation.value &&
+    !renderOriginal.value
+  );
+});
 
 const originalEmailText = computed(() => {
   const text =
@@ -55,29 +75,23 @@ const hasEmailContent = computed(() => {
 });
 
 const messageContent = computed(() => {
-  // If translations exist and we're showing translations (not original)
-  if (hasTranslations.value && !renderOriginal.value) {
+  if (shouldUseLegacyTranslation.value) {
     return translationContent.value;
   }
-  // Otherwise show original content
   return content.value;
 });
 
 const textToShow = computed(() => {
-  // If translations exist and we're showing translations (not original)
-  if (hasTranslations.value && !renderOriginal.value) {
+  if (shouldUseLegacyTranslation.value) {
     return translationContent.value;
   }
-  // Otherwise show original text
   return originalEmailText.value;
 });
 
 const fullHTML = computed(() => {
-  // If translations exist and we're showing translations (not original)
-  if (hasTranslations.value && !renderOriginal.value) {
+  if (shouldUseLegacyTranslation.value) {
     return translationContent.value;
   }
-  // Otherwise show original HTML
   return originalEmailHtml.value;
 });
 
@@ -93,7 +107,7 @@ const hasQuotedMessage = computed(() =>
 // This forces Vue to re-render the component and update content correctly.
 const translationKeySuffix = computed(() => {
   if (renderOriginal.value) return 'original';
-  if (hasTranslations.value) return 'translated';
+  if (shouldUseLegacyTranslation.value) return 'translated';
   return 'original';
 });
 
@@ -195,8 +209,18 @@ const handleSeeOriginal = () => {
         </button>
       </div>
     </section>
+    <section v-if="hasOperatorTranslation" class="px-3 pb-3">
+      <div
+        class="rounded-md border border-n-weak bg-n-alpha-2 px-3 py-2 text-n-slate-12"
+      >
+        <div class="mb-1 text-xs font-medium uppercase text-n-slate-11">
+          {{ $t('CONVERSATION.OPERATOR_TRANSLATION.LABEL') }}
+        </div>
+        <FormattedContent :content="operatorTranslation.content" />
+      </div>
+    </section>
     <TranslationToggle
-      v-if="hasTranslations"
+      v-if="hasTranslations && !hasOperatorTranslation"
       class="py-2 px-3"
       :showing-original="renderOriginal"
       @toggle="handleSeeOriginal"

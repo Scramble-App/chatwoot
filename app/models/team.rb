@@ -2,13 +2,14 @@
 #
 # Table name: teams
 #
-#  id                :bigint           not null, primary key
-#  allow_auto_assign :boolean          default(TRUE)
-#  description       :text
-#  name              :string           not null
-#  created_at        :datetime         not null
-#  updated_at        :datetime         not null
-#  account_id        :bigint           not null
+#  id                    :bigint           not null, primary key
+#  allow_auto_assign     :boolean          default(TRUE)
+#  description           :text
+#  name                  :string           not null
+#  reassign_on_shift_end :boolean          default(FALSE), not null
+#  created_at            :datetime         not null
+#  updated_at            :datetime         not null
+#  account_id            :bigint           not null
 #
 # Indexes
 #
@@ -34,8 +35,10 @@ class Team < ApplicationRecord
   # Adds multiple members to the team
   # @param user_ids [Array<Integer>] Array of user IDs to add as members
   # @return [Array<User>] Array of newly added members
-  def add_members(user_ids)
-    team_members_to_create = user_ids.map { |user_id| { user_id: user_id } }
+  def add_members(user_ids, team_lead_ids = [])
+    team_members_to_create = user_ids.map do |user_id|
+      { user_id: user_id, team_lead: team_lead_ids.include?(user_id) }
+    end
     created_members = team_members.create(team_members_to_create)
     added_users = created_members.filter_map(&:user)
 
@@ -48,6 +51,13 @@ class Team < ApplicationRecord
   # @return [void]
   def remove_members(user_ids)
     team_members.where(user_id: user_ids).destroy_all
+    update_account_cache
+  end
+
+  def update_team_leads(user_ids)
+    team_members.find_each do |team_member|
+      team_member.update!(team_lead: user_ids.include?(team_member.user_id))
+    end
     update_account_cache
   end
 

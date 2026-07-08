@@ -7,6 +7,9 @@
 #  auto_offline             :boolean          default(TRUE), not null
 #  availability             :integer          default("online"), not null
 #  role                     :integer          default("agent")
+#  schedule_enabled         :boolean          default(FALSE), not null
+#  schedule_timezone        :string
+#  translation_locale       :string
 #  created_at               :datetime         not null
 #  updated_at               :datetime         not null
 #  account_id               :bigint
@@ -27,20 +30,47 @@
 class AccountUser < ApplicationRecord
   include AvailabilityStatusable
 
+  DEFAULT_SCHEDULE_TIMEZONE = 'Europe/Tallinn'.freeze
+
   belongs_to :account
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
+  has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :destroy_async
+  has_many :schedule_exceptions, class_name: 'AccountUserScheduleException', dependent: :destroy_async
 
   enum role: { agent: 0, administrator: 1 }
   enum availability: { online: 0, offline: 1, busy: 2 }
 
   accepts_nested_attributes_for :account
+  accepts_nested_attributes_for :working_hours, allow_destroy: true
+  accepts_nested_attributes_for :schedule_exceptions, allow_destroy: true
 
   after_create_commit :notify_creation, :create_notification_setting
   after_destroy :notify_deletion, :remove_user_from_account
   after_save :update_presence_in_redis, if: :saved_change_to_availability?
 
   validates :user_id, uniqueness: { scope: :account_id }
+  validates :translation_locale, length: { maximum: 20 }, allow_blank: true
+  validates :schedule_timezone, inclusion: { in: TZInfo::Timezone.all_identifiers }, allow_blank: true
+
+  def schedule_time_zone
+    schedule_timezone.presence || account.reporting_timezone.presence || DEFAULT_SCHEDULE_TIMEZONE
+  end
+
+  def availability_source
+    schedule_enabled? ? 'schedule' : 'manual'
+  end
+
+  def scheduled_availability_at(time = Time.current)
+    schedule_available_at?(time) ? 'online' : 'offline'
+  end
+
+  def schedule_available_at?(time = Time.current)
+    active_exception = schedule_exceptions.active_at(time).order(starts_at: :desc).first
+    return active_exception.available? if active_exception.present?
+
+    working_hours.any? { |working_hour| working_hour.open_at?(time) }
+  end
 
   def create_notification_setting
     setting = user.notification_settings.new(account_id: account.id)
@@ -61,6 +91,9 @@ class AccountUser < ApplicationRecord
     {
       id: id,
       availability: availability,
+      availability_status: availability_status,
+      availability_source: availability_source,
+      schedule_enabled: schedule_enabled?,
       role: role,
       user_id: user_id
     }

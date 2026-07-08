@@ -9,6 +9,35 @@
       "ADMINISTRATOR": "Administrator",
       "AGENT": "Agent"
     },
+    "TRANSLATION_LANGUAGE": {
+      "LABEL": "Operator translation language",
+      "NONE": "No automatic translation"
+    },
+    "SCHEDULE": {
+      "ENABLED": "Use agent schedule",
+      "STATUS_READ_ONLY": "Availability is controlled by the agent schedule.",
+      "TIMEZONE": "Schedule timezone",
+      "TIMEZONE_PLACEHOLDER": "Select timezone",
+      "WEEKLY_HOURS": "Weekly hours",
+      "ADD_INTERVAL": "Add interval",
+      "DAY": "Day",
+      "START": "Start",
+      "END": "End",
+      "REMOVE": "Remove",
+      "EXCEPTIONS": "Exceptions",
+      "ADD_EXCEPTION": "Add exception",
+      "EXCEPTION_NAME": "Name",
+      "AVAILABLE": "Available",
+      "DAYS": {
+        "SUNDAY": "Sunday",
+        "MONDAY": "Monday",
+        "TUESDAY": "Tuesday",
+        "WEDNESDAY": "Wednesday",
+        "THURSDAY": "Thursday",
+        "FRIDAY": "Friday",
+        "SATURDAY": "Saturday"
+      }
+    },
     "COUNT": "{n} agent | {n} agents",
     "LIST": {
       "404": "There are no agents associated to this account",

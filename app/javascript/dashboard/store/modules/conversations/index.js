@@ -227,6 +227,21 @@ export const mutations = {
     }
   },
 
+  [types.UPDATE_MESSAGE_TRANSLATION](_state, payload) {
+    const conversationId = Number(
+      payload.conversation_id ?? payload.conversationId
+    );
+    const messageId = Number(payload.message_id ?? payload.messageId);
+    const operatorTranslation =
+      payload.operator_translation ?? payload.operatorTranslation;
+    const chat = getConversationById(_state)(conversationId);
+    const message = chat?.messages?.find(item => Number(item.id) === messageId);
+
+    if (message && operatorTranslation) {
+      message.operator_translation = operatorTranslation;
+    }
+  },
+
   [types.ADD_CONVERSATION](_state, conversation) {
     const exists = _state.allConversations.some(c => c.id === conversation.id);
     if (!exists) {

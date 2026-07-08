@@ -181,6 +181,7 @@
         },
         "GRAMMAR": "Fix grammar & spelling",
         "SUGGESTION": "Suggest a reply",
+        "ANSWER_FROM_KNOWLEDGE_BASE": "Answer from knowledge base",
         "SUMMARIZE": "Summarize the conversation",
         "ASK_COPILOT": "Ask Copilot"
       },

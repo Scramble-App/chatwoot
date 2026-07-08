@@ -27,6 +27,7 @@ export default {
   data() {
     return {
       selectedAgents: [],
+      teamLeadAgents: [],
       isCreating: false,
     };
   },
@@ -65,9 +66,14 @@ export default {
         teamId,
       });
       const members = this.teamMembers.map(item => item.id);
+      const teamLeads = this.teamMembers
+        .filter(item => item.team_lead)
+        .map(item => item.id);
       this.updateSelectedAgents(members);
+      this.updateTeamLeadAgents(teamLeads);
     } catch {
       this.updateSelectedAgents([]);
+      this.updateTeamLeadAgents([]);
     }
   },
 
@@ -75,15 +81,22 @@ export default {
     updateSelectedAgents(newAgentList) {
       this.v$.selectedAgents.$touch();
       this.selectedAgents = [...newAgentList];
+      this.teamLeadAgents = this.teamLeadAgents.filter(agentId =>
+        this.selectedAgents.includes(agentId)
+      );
+    },
+    updateTeamLeadAgents(newAgentList) {
+      this.teamLeadAgents = [...newAgentList];
     },
     async addAgents() {
       this.isCreating = true;
-      const { teamId, selectedAgents } = this;
+      const { teamId, selectedAgents, teamLeadAgents } = this;
 
       try {
         await this.$store.dispatch('teamMembers/update', {
           teamId,
           agentsList: selectedAgents,
+          teamLeadIds: teamLeadAgents,
         });
         router.replace({
           name: 'settings_teams_edit_finish',
@@ -121,6 +134,8 @@ export default {
           :agent-list="agentList"
           :selected-agents="selectedAgents"
           :update-selected-agents="updateSelectedAgents"
+          :team-lead-agents="teamLeadAgents"
+          :update-team-lead-agents="updateTeamLeadAgents"
           :is-working="isCreating"
           :submit-button-text="
             $t('TEAMS_SETTINGS.EDIT_FLOW.AGENTS.BUTTON_TEXT')

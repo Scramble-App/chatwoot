@@ -14,7 +14,7 @@ RSpec.describe AutoAssignment::AssignmentJob, type: :job do
       context 'when auto assignment is enabled' do
         it 'calls the assignment service' do
           service = instance_double(AutoAssignment::AssignmentService)
-          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox).and_return(service)
+          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox, statuses: ['open']).and_return(service)
           expect(service).to receive(:perform_bulk_assignment).with(limit: 100).and_return(5)
 
           described_class.new.perform(inbox_id: inbox.id)
@@ -34,7 +34,7 @@ RSpec.describe AutoAssignment::AssignmentJob, type: :job do
           allow(ENV).to receive(:fetch).with('AUTO_ASSIGNMENT_BULK_LIMIT', 100).and_return('50')
 
           service = instance_double(AutoAssignment::AssignmentService)
-          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox).and_return(service)
+          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox, statuses: ['open']).and_return(service)
           expect(service).to receive(:perform_bulk_assignment).with(limit: 50).and_return(2)
 
           described_class.new.perform(inbox_id: inbox.id)
@@ -46,7 +46,7 @@ RSpec.describe AutoAssignment::AssignmentJob, type: :job do
 
         it 'calls the service which handles the disabled state' do
           service = instance_double(AutoAssignment::AssignmentService)
-          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox).and_return(service)
+          allow(AutoAssignment::AssignmentService).to receive(:new).with(inbox: inbox, statuses: ['open']).and_return(service)
           expect(service).to receive(:perform_bulk_assignment).with(limit: 100).and_return(0)
 
           described_class.new.perform(inbox_id: inbox.id)

@@ -337,6 +337,46 @@ const actions = {
     handleVoiceCallUpdated(commit, message, rootGetters?.getCurrentUserID);
   },
 
+  updateMessageTranslation({ commit }, data) {
+    commit(types.UPDATE_MESSAGE_TRANSLATION, data);
+  },
+
+  prepareReply: async (_, { conversationId, content }) => {
+    const { data } = await ConversationApi.prepareReply({
+      conversationId,
+      content,
+    });
+    return data;
+  },
+
+  summarizeConversation: async (_, { conversationId }) => {
+    const { data } = await ConversationApi.summarize(conversationId);
+    return data;
+  },
+  knowledgeAnswer: async (_, { conversationId }) => {
+    const { data } = await ConversationApi.knowledgeAnswer(conversationId);
+    return data;
+  },
+
+  linkCustomerIdentitySuggestion: async ({ dispatch }, { conversationId }) => {
+    const { data } = await ConversationApi.linkCustomerIdentitySuggestion({
+      conversationId,
+    });
+    dispatch('updateConversation', data);
+    return data;
+  },
+
+  dismissCustomerIdentitySuggestion: async (
+    { dispatch },
+    { conversationId }
+  ) => {
+    const { data } = await ConversationApi.dismissCustomerIdentitySuggestion({
+      conversationId,
+    });
+    dispatch('updateConversation', data);
+    return data;
+  },
+
   deleteMessage: async function deleteLabels(
     { commit },
     { conversationId, messageId }

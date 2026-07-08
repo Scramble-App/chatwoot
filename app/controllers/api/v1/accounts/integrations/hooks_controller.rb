@@ -7,7 +7,7 @@ class Api::V1::Accounts::Integrations::HooksController < Api::V1::Accounts::Base
   end
 
   def update
-    @hook.update!(permitted_params.slice(:status, :settings))
+    @hook.update!(permitted_update_params)
   end
 
   def process_event
@@ -41,5 +41,24 @@ class Api::V1::Accounts::Integrations::HooksController < Api::V1::Accounts::Base
 
   def permitted_params
     params.require(:hook).permit(:app_id, :inbox_id, :status, settings: {})
+  end
+
+  def permitted_update_params
+    hook_params = permitted_params.slice(:status, :settings)
+    return hook_params unless hook_params.key?(:settings)
+
+    hook_params[:settings] = merged_settings_for_update(hook_params[:settings])
+    hook_params
+  end
+
+  def merged_settings_for_update(incoming_settings)
+    incoming = incoming_settings.to_h.deep_stringify_keys
+    existing = @hook.settings.to_h.deep_stringify_keys
+
+    @hook.sensitive_properties.each do |property|
+      incoming.delete(property) if incoming[property].blank?
+    end
+
+    existing.merge(incoming)
   end
 end

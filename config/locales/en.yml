@@ -365,6 +365,10 @@ en:
       name: 'OpenAI'
       short_description: 'AI-powered reply suggestions, summarization, and message enhancement.'
       description: 'Leverage the power of large language models from OpenAI with the features such as reply suggestions, summarization, message rephrasing, spell-checking, and label classification.'
+    onyx_mcp:
+      name: 'Onyx MCP'
+      short_description: 'Search indexed Onyx knowledge and draft answers for agents.'
+      description: 'Connect Onyx MCP to retrieve indexed knowledge base excerpts and prepare answer drafts for support agents through OpenAI.'
     linear:
       name: 'Linear'
       short_description: 'Create and link Linear issues directly from conversations.'

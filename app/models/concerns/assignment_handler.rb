@@ -37,7 +37,19 @@ module AssignmentHandler
   end
 
   def process_assignment_changes
+    record_assignment_event
     process_assignment_activities
+  end
+
+  def record_assignment_event
+    return unless saved_change_to_assignee_id?
+
+    from_assignee_id, to_assignee_id = previous_changes[:assignee_id]
+    ConversationAssignmentEvents::Recorder.record!(
+      conversation: self,
+      from_assignee_id: from_assignee_id,
+      to_assignee_id: to_assignee_id
+    )
   end
 
   def process_assignment_activities

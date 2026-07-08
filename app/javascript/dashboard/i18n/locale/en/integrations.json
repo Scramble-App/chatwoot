@@ -167,6 +167,7 @@
         "STRAIGHTFORWARD": "Use straightforward tone"
       },
       "REPLY_OPTIONS": {
+        "PREPARE_ANSWER": "Prepare answer",
         "IMPROVE_REPLY": "Improve reply",
         "IMPROVE_REPLY_SELECTION": "Improve the selection",
         "CHANGE_TONE": {
@@ -181,7 +182,8 @@
         },
         "GRAMMAR": "Fix grammar & spelling",
         "SUGGESTION": "Suggest a reply",
-        "SUMMARIZE": "Summarize the conversation",
+        "ANSWER_FROM_KNOWLEDGE_BASE": "Answer from knowledge base",
+        "SUMMARIZE": "Summarize conversation",
         "ASK_COPILOT": "Ask Copilot"
       },
       "ASSISTANCE_MODAL": {

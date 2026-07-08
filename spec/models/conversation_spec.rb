@@ -8,6 +8,7 @@ RSpec.describe Conversation do
   after do
     Current.user = nil
     Current.account = nil
+    Current.assignment_event_source = nil
   end
 
   describe 'associations' do
@@ -18,6 +19,7 @@ RSpec.describe Conversation do
     it { is_expected.to belong_to(:assignee).optional }
     it { is_expected.to belong_to(:team).optional }
     it { is_expected.to belong_to(:campaign).optional }
+    it { is_expected.to have_many(:assignment_events) }
   end
 
   describe 'concerns' do
@@ -70,6 +72,28 @@ RSpec.describe Conversation do
       expect(Rails.configuration.dispatcher).to have_received(:dispatch)
         .with(described_class::CONVERSATION_CREATED, kind_of(Time), conversation: conversation, notifiable_assignee_change: false,
                                                                     changed_attributes: nil, performed_by: nil)
+    end
+  end
+
+  describe 'assignment history' do
+    let(:account) { create(:account) }
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let(:conversation) { create(:conversation, account: account, assignee: nil) }
+
+    it 'records assignee changes' do
+      Current.user = agent
+
+      expect do
+        conversation.update!(assignee: agent)
+      end.to change(ConversationAssignmentEvent, :count).by(1)
+
+      event = conversation.assignment_events.last
+      expect(event).to have_attributes(
+        event_type: 'assigned',
+        source: 'manual',
+        from_assignee_id: nil,
+        to_assignee_id: agent.id
+      )
     end
   end
 

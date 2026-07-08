@@ -74,6 +74,28 @@ RSpec.describe 'Integration Hooks API', type: :request do
         data = response.parsed_body
         expect(data['app_id']).to eq 'slack'
       end
+
+      it 'preserves an existing OpenAI API key when updating editable settings' do
+        allow(Integrations::Openai::KeyValidator).to receive(:valid?).and_return(true)
+        openai_hook = create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-existing', 'translation_model' => 'gpt-old' })
+
+        patch api_v1_account_integrations_hook_url(account_id: account.id, id: openai_hook.id),
+              params: {
+                settings: {
+                  api_key: '',
+                  translation_model: 'gpt-new',
+                  prepare_answer_instructions: 'Custom prepare prompt'
+                }
+              },
+              headers: admin.create_new_auth_token,
+              as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(openai_hook.reload.settings['api_key']).to eq('sk-existing')
+        expect(openai_hook.settings['translation_model']).to eq('gpt-new')
+        expect(response.parsed_body['settings']).not_to have_key('api_key')
+        expect(response.parsed_body['sensitive_settings_configured']['api_key_configured']).to be true
+      end
     end
   end
 

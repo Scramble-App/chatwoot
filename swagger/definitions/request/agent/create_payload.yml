@@ -26,3 +26,9 @@ properties:
     type: boolean
     description: Whether the availability status of agent is configured to go offline automatically when away.
     example: true
+  translation_locale:
+    type:
+      - string
+      - 'null'
+    description: Locale used for operator-only incoming message translations.
+    example: 'en'

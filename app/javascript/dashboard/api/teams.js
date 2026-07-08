@@ -26,15 +26,17 @@ export class TeamsAPI extends CacheEnabledApiClient {
     return axios.get(`${this.url}/${teamId}/team_members`);
   }
 
-  addAgents({ teamId, agentsList }) {
+  addAgents({ teamId, agentsList, teamLeadIds = [] }) {
     return axios.post(`${this.url}/${teamId}/team_members`, {
       user_ids: agentsList,
+      team_lead_ids: teamLeadIds,
     });
   }
 
-  updateAgents({ teamId, agentsList }) {
+  updateAgents({ teamId, agentsList, teamLeadIds = [] }) {
     return axios.patch(`${this.url}/${teamId}/team_members`, {
       user_ids: agentsList,
+      team_lead_ids: teamLeadIds,
     });
   }
 }

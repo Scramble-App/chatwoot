@@ -291,6 +291,11 @@ const confirmDeletion = () => {
         :email="currentAgent.email"
         :availability="currentAgent.availability_status"
         :custom-role-id="currentAgent.custom_role_id"
+        :translation-locale="currentAgent.translation_locale"
+        :schedule-enabled="currentAgent.schedule_enabled"
+        :schedule-timezone="currentAgent.schedule_timezone"
+        :working-hours="currentAgent.working_hours"
+        :schedule-exceptions="currentAgent.schedule_exceptions"
         @close="hideEditPopup"
       />
     </woot-modal>

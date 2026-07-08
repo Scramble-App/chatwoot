@@ -34,10 +34,14 @@ export const actions = {
       commit(SET_TEAM_MEMBERS_UI_FLAG, { isFetching: false });
     }
   },
-  create: async ({ commit }, { agentsList, teamId }) => {
+  create: async ({ commit }, { agentsList, teamId, teamLeadIds }) => {
     commit(SET_TEAM_MEMBERS_UI_FLAG, { isCreating: true });
     try {
-      const { data } = await TeamsAPI.addAgents({ agentsList, teamId });
+      const { data } = await TeamsAPI.addAgents({
+        agentsList,
+        teamId,
+        teamLeadIds,
+      });
       commit(ADD_AGENTS_TO_TEAM, { teamId, data });
     } catch (error) {
       throw new Error(error);
@@ -45,14 +49,15 @@ export const actions = {
       commit(SET_TEAM_MEMBERS_UI_FLAG, { isCreating: false });
     }
   },
-  update: async ({ commit }, { agentsList, teamId }) => {
+  update: async ({ commit }, { agentsList, teamId, teamLeadIds }) => {
     commit(SET_TEAM_MEMBERS_UI_FLAG, { isUpdating: true });
     try {
-      const response = await TeamsAPI.updateAgents({
+      const { data } = await TeamsAPI.updateAgents({
         agentsList,
         teamId,
+        teamLeadIds,
       });
-      commit(ADD_AGENTS_TO_TEAM, response);
+      commit(ADD_AGENTS_TO_TEAM, { teamId, data });
     } catch (error) {
       throw new Error(error);
     } finally {

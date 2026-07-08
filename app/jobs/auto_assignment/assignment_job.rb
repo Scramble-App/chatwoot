@@ -1,11 +1,11 @@
 class AutoAssignment::AssignmentJob < ApplicationJob
   queue_as :default
 
-  def perform(inbox_id:)
+  def perform(inbox_id:, statuses: ['open'])
     inbox = Inbox.find_by(id: inbox_id)
     return unless inbox
 
-    service = AutoAssignment::AssignmentService.new(inbox: inbox)
+    service = AutoAssignment::AssignmentService.new(inbox: inbox, statuses: statuses)
 
     assigned_count = service.perform_bulk_assignment(limit: bulk_assignment_limit)
     Rails.logger.info "Assigned #{assigned_count} conversations for inbox #{inbox.id}"

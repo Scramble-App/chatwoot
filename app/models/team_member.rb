@@ -3,6 +3,7 @@
 # Table name: team_members
 #
 #  id         :bigint           not null, primary key
+#  team_lead  :boolean          default(FALSE), not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
 #  team_id    :bigint           not null
@@ -18,6 +19,8 @@ class TeamMember < ApplicationRecord
   belongs_to :user
   belongs_to :team
   validates :user_id, uniqueness: { scope: :team_id }
+
+  scope :team_leads, -> { where(team_lead: true) }
 end
 
 TeamMember.include_mod_with('Audit::TeamMember')

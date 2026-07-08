@@ -223,6 +223,19 @@ RSpec.describe 'Profile API', type: :request do
         expect(response).to have_http_status(:success)
         expect(OnlineStatusTracker.get_status(account.id, agent.id)).to eq('busy')
       end
+
+      it 'does not update availability when agent schedule controls status' do
+        account_user = agent.account_users.find_by!(account_id: account.id)
+        account_user.update!(schedule_enabled: true, schedule_timezone: 'UTC', availability: 'online')
+
+        post '/api/v1/profile/availability',
+             params: { profile: { availability: 'busy', account_id: account.id } },
+             headers: agent.create_new_auth_token,
+             as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(account_user.reload.availability).to eq('online')
+      end
     end
   end
 

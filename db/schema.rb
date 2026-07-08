@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_02_090001) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -40,6 +40,35 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.index ["account_id"], name: "index_account_saml_settings_on_account_id"
   end
 
+  create_table "account_user_schedule_exceptions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "account_user_id", null: false
+    t.datetime "starts_at", null: false
+    t.datetime "ends_at", null: false
+    t.boolean "available", default: false, null: false
+    t.string "name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_account_user_schedule_exceptions_on_account_id"
+    t.index ["account_user_id", "starts_at", "ends_at"], name: "idx_account_user_schedule_exceptions_on_range"
+    t.index ["account_user_id"], name: "index_account_user_schedule_exceptions_on_account_user_id"
+  end
+
+  create_table "account_user_working_hours", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "account_user_id", null: false
+    t.integer "day_of_week", null: false
+    t.integer "open_hour", null: false
+    t.integer "open_minutes", default: 0, null: false
+    t.integer "close_hour", null: false
+    t.integer "close_minutes", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_account_user_working_hours_on_account_id"
+    t.index ["account_user_id", "day_of_week"], name: "idx_account_user_working_hours_on_user_and_day"
+    t.index ["account_user_id"], name: "index_account_user_working_hours_on_account_user_id"
+  end
+
   create_table "account_users", force: :cascade do |t|
     t.bigint "account_id"
     t.bigint "user_id"
@@ -52,6 +81,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.boolean "auto_offline", default: true, null: false
     t.bigint "custom_role_id"
     t.bigint "agent_capacity_policy_id"
+    t.string "translation_locale"
+    t.boolean "schedule_enabled", default: false, null: false
+    t.string "schedule_timezone"
     t.index ["account_id", "user_id"], name: "uniq_user_id_per_account_id", unique: true
     t.index ["account_id"], name: "index_account_users_on_account_id"
     t.index ["agent_capacity_policy_id"], name: "index_account_users_on_agent_capacity_policy_id"
@@ -669,6 +701,30 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.index ["phone_number", "account_id"], name: "index_contacts_on_phone_number_and_account_id"
   end
 
+  create_table "conversation_assignment_events", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "inbox_id", null: false
+    t.bigint "team_id"
+    t.bigint "from_assignee_id"
+    t.bigint "to_assignee_id"
+    t.string "event_type", null: false
+    t.string "source", null: false
+    t.string "actor_type"
+    t.bigint "actor_id"
+    t.datetime "occurred_at", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "to_assignee_id", "occurred_at"], name: "idx_conversation_assignment_events_on_account_agent_time"
+    t.index ["account_id"], name: "index_conversation_assignment_events_on_account_id"
+    t.index ["conversation_id", "occurred_at"], name: "idx_conversation_assignment_events_on_conversation_time"
+    t.index ["conversation_id"], name: "index_conversation_assignment_events_on_conversation_id"
+    t.index ["inbox_id"], name: "index_conversation_assignment_events_on_inbox_id"
+    t.index ["source", "event_type"], name: "idx_conversation_assignment_events_on_source_event_type"
+    t.index ["team_id"], name: "index_conversation_assignment_events_on_team_id"
+  end
+
   create_table "conversation_participants", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.bigint "user_id", null: false
@@ -987,6 +1043,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.index ["user_id"], name: "index_mentions_on_user_id"
   end
 
+  create_table "message_translations", force: :cascade do |t|
+    t.integer "account_id", null: false
+    t.integer "message_id", null: false
+    t.string "target_locale", null: false
+    t.string "provider", default: "openai", null: false
+    t.string "model"
+    t.integer "status", default: 0, null: false
+    t.text "content"
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "target_locale"], name: "index_message_translations_on_account_id_and_target_locale"
+    t.index ["account_id"], name: "index_message_translations_on_account_id"
+    t.index ["message_id", "target_locale", "provider"], name: "index_message_translations_on_message_locale_provider", unique: true
+    t.index ["message_id"], name: "index_message_translations_on_message_id"
+  end
+
   create_table "messages", id: :serial, force: :cascade do |t|
     t.text "content"
     t.integer "account_id", null: false
@@ -1236,6 +1309,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "team_lead", default: false, null: false
     t.index ["team_id", "user_id"], name: "index_team_members_on_team_id_and_user_id", unique: true
     t.index ["team_id"], name: "index_team_members_on_team_id"
     t.index ["user_id"], name: "index_team_members_on_user_id"
@@ -1248,6 +1322,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.bigint "account_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "reassign_on_shift_end", default: false, null: false
     t.index ["account_id"], name: "index_teams_on_account_id"
     t.index ["name", "account_id"], name: "index_teams_on_name_and_account_id", unique: true
   end
@@ -1321,9 +1396,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.index ["inbox_id"], name: "index_working_hours_on_inbox_id"
   end
 
+  add_foreign_key "account_user_schedule_exceptions", "account_users"
+  add_foreign_key "account_user_schedule_exceptions", "accounts"
+  add_foreign_key "account_user_working_hours", "account_users"
+  add_foreign_key "account_user_working_hours", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "conversation_assignment_events", "accounts"
+  add_foreign_key "conversation_assignment_events", "conversations"
+  add_foreign_key "conversation_assignment_events", "inboxes"
+  add_foreign_key "conversation_assignment_events", "teams"
+  add_foreign_key "conversation_assignment_events", "users", column: "from_assignee_id"
+  add_foreign_key "conversation_assignment_events", "users", column: "to_assignee_id"
   add_foreign_key "inboxes", "portals"
+  add_foreign_key "message_translations", "accounts"
+  add_foreign_key "message_translations", "messages"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).
       on("accounts").
       after(:insert).

@@ -90,6 +90,7 @@ const MessageControl = Symbol('MessageControl');
  * @property {import('vue').Ref<string|null>} [error=null] - Error message if the message failed to send
  * @property {import('vue').Ref<Attachment[]>} [attachments=[]] - The attachments associated with the message
  * @property {import('vue').Ref<ContentAttributes>} [contentAttributes={}] - Additional attributes of the message content
+ * @property {import('vue').Ref<Object|null>} [operatorTranslation=null] - Operator-only message translation for the current account user
  * @property {import('vue').Ref<MessageContentType>} contentType - Content type of the message
  * @property {import('vue').Ref<MessageStatus>} status - The delivery status of the message
  * @property {import('vue').Ref<MessageType>} messageType - The type of message (must be one of MESSAGE_TYPES)

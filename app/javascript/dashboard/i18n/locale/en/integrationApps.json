@@ -54,6 +54,15 @@
         "ERROR_MESSAGE": "Could not connect to Woot Server, Please try again later"
       }
     },
+    "EDIT": {
+      "FORM": {
+        "SUBMIT": "Save changes"
+      },
+      "API": {
+        "SUCCESS_MESSAGE": "Integration hook updated successfully",
+        "ERROR_MESSAGE": "Could not update integration hook, Please try again later"
+      }
+    },
     "CONNECT": {
       "BUTTON_TEXT": "Connect"
     },

@@ -1,7 +1,6 @@
 <script>
 import { ref } from 'vue';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
-import { useCaptain } from 'dashboard/composables/useCaptain';
 import { useTrack } from 'dashboard/composables';
 import { vOnClickOutside } from '@vueuse/components';
 import { REPLY_EDITOR_MODES, CHAR_LENGTH_WARNING } from './constants';
@@ -74,7 +73,6 @@ export default {
       setReplyMode(newMode);
     };
 
-    const { captainTasksEnabled } = useCaptain();
     const showCopilotMenu = ref(false);
 
     const handleCopilotAction = (actionKey, data) => {
@@ -114,7 +112,6 @@ export default {
       handleReplyClick,
       handleNoteClick,
       REPLY_EDITOR_MODES,
-      captainTasksEnabled,
       handleCopilotAction,
       showCopilotMenu,
       toggleCopilotMenu,
@@ -161,7 +158,7 @@ export default {
         </span>
       </div>
     </div>
-    <div v-if="captainTasksEnabled" class="flex items-center gap-2">
+    <div class="flex items-center gap-2">
       <div class="relative">
         <NextButton
           ghost

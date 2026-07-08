@@ -11,10 +11,13 @@ defineProps({
   },
 });
 
-const emit = defineEmits(['submit', 'cancel']);
+const emit = defineEmits(['submit', 'cancel', 'copy']);
 const { t } = useI18n();
 const handleCancel = () => {
   emit('cancel');
+};
+const handleCopy = () => {
+  emit('copy');
 };
 
 const shortcutKey = useKbd(['$mod', '+', 'enter']);
@@ -39,13 +42,24 @@ const handleSubmit = () => {
       :disabled="isGeneratingContent"
       @click="handleCancel"
     />
-    <NextButton
-      :label="acceptLabel"
-      class="bg-n-iris-9 text-white"
-      solid
-      sm
-      :disabled="isGeneratingContent"
-      @click="handleSubmit"
-    />
+    <div class="flex items-center gap-2">
+      <NextButton
+        :label="t('CONVERSATION.CONTEXT_MENU.COPY')"
+        icon="i-lucide-copy"
+        slate
+        ghost
+        sm
+        :disabled="isGeneratingContent"
+        @click="handleCopy"
+      />
+      <NextButton
+        :label="acceptLabel"
+        class="bg-n-iris-9 text-white"
+        solid
+        sm
+        :disabled="isGeneratingContent"
+        @click="handleSubmit"
+      />
+    </div>
   </div>
 </template>
