@@ -113,7 +113,10 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
-  has_many :assignment_events, class_name: 'ConversationAssignmentEvent', dependent: :destroy_async
+  # Deleted inline for the same reason as the associations below: destroy_async enqueues the child
+  # deletion from an after_commit callback, so the parent DELETE reaches the database while these rows
+  # still reference it. delete_all rather than destroy because the model has no destroy callbacks.
+  has_many :assignment_events, class_name: 'ConversationAssignmentEvent', dependent: :delete_all
   # These are destroyed inline because their tables carry a restricting foreign key on conversation_id.
   has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
   has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
