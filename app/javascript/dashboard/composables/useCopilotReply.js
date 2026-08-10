@@ -1,10 +1,12 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store.js';
 import { useAlert, useTrack } from 'dashboard/composables';
 import { emitter } from 'shared/helpers/mitt';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { CAPTAIN_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
-import { KINDS } from 'dashboard/store/modules/aiGenerations';
+import { CAPTAIN_GENERATION_FAILURE_REASONS } from 'dashboard/composables/captain/constants';
+import { KINDS, KIND_LIST } from 'dashboard/store/modules/aiGenerations';
 
 // Actions that map to REWRITE events (with operation attribute)
 const REWRITE_ACTIONS = [
@@ -64,6 +66,22 @@ function buildPayload(action, conversationId) {
 }
 
 /**
+ * Emits the generation failure event.
+ * @param {Object} params - Failure details
+ * @param {string} params.action - The action type
+ * @param {number} params.conversationId - The conversation ID
+ * @param {string} params.stage - Where the failure happened
+ * @param {string} params.reason - The failure reason
+ */
+function trackGenerationFailure({ action, conversationId, stage, reason }) {
+  useTrack(CAPTAIN_EVENTS.GENERATION_FAILED, {
+    ...buildPayload(action, conversationId),
+    stage,
+    reason,
+  });
+}
+
+/**
  * Composable exposing the async AI generation for the selected conversation.
  * State lives in the aiGenerations store module so it survives navigation.
  *
@@ -71,6 +89,7 @@ function buildPayload(action, conversationId) {
  */
 export function useCopilotReply() {
   const store = useStore();
+  const { t } = useI18n();
   const currentChat = useMapGetter('getSelectedChat');
   const conversationId = computed(() => currentChat.value?.id);
 
@@ -117,7 +136,8 @@ export function useCopilotReply() {
 
   watch(conversationId, () => {
     isEditorDismissed.value = false;
-    isContentReady.value = false;
+    // isContentReady is left alone: a conversation that already holds a completed generation
+    // renders it without an enter transition, so nothing would set the flag again.
     fetchAll();
   });
 
@@ -130,19 +150,55 @@ export function useCopilotReply() {
     emitter.off(BUS_EVENTS.WEBSOCKET_RECONNECT, fetchAll);
   });
 
-  // A failed generation is surfaced once, then removed so it does not reappear.
-  watch(
-    () => record.value?.status,
-    status => {
-      if (status !== 'failed') return;
-
-      useAlert(record.value.error_message);
-      store.dispatch('aiGenerations/dismiss', {
-        kind: record.value.kind,
-        conversationId: record.value.conversationId,
-      });
-    }
+  // Every kind of the current conversation, not just the most recently updated one, so a
+  // second failure is still surfaced and a completed record is still counted.
+  const conversationRecords = computed(() =>
+    conversationId.value
+      ? KIND_LIST.map(kind =>
+          store.getters['aiGenerations/get'](kind, conversationId.value)
+        ).filter(Boolean)
+      : []
   );
+
+  // Generations already reported to analytics, keyed by kind and record id.
+  const trackedGenerations = new Set();
+
+  const handleFailedGeneration = generation => {
+    useAlert(generation.error_message);
+    trackGenerationFailure({
+      action: KIND_ACTIONS[generation.kind],
+      conversationId: generation.conversationId,
+      stage: 'initial',
+      reason: generation.error_message
+        ? CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION
+        : CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
+    });
+    // Removed so it does not reappear when the operator returns to the conversation.
+    store.dispatch('aiGenerations/dismiss', {
+      kind: generation.kind,
+      conversationId: generation.conversationId,
+    });
+  };
+
+  const handleCompletedGeneration = generation => {
+    const key = `${generation.kind}:${generation.id}`;
+    if (!generation.content || trackedGenerations.has(key)) return;
+
+    trackedGenerations.add(key);
+    const action = KIND_ACTIONS[generation.kind];
+    useTrack(
+      CAPTAIN_EVENTS[`${getEventPrefix(action)}_USED`],
+      buildPayload(action, generation.conversationId)
+    );
+  };
+
+  watch(conversationRecords, generations => {
+    generations.forEach(generation => {
+      if (generation.status === 'failed') handleFailedGeneration(generation);
+      if (generation.status === 'completed')
+        handleCompletedGeneration(generation);
+    });
+  });
 
   /**
    * Discards the current suggestion. The stored generation is deleted so it
@@ -206,8 +262,14 @@ export function useCopilotReply() {
     } catch (error) {
       useAlert(
         error.response?.data?.error ||
-          'Failed to generate content. Please try again.'
+          t('CONVERSATION.REPLYBOX.COPILOT_GENERATION_ERROR')
       );
+      trackGenerationFailure({
+        action,
+        conversationId: conversationId.value,
+        stage: 'initial',
+        reason: CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION,
+      });
     }
   }
 

@@ -436,8 +436,8 @@ export default {
         // This prevents overwriting user input (e.g., CC/BCC fields) when performing actions
         // like self-assign or other updates that do not actually change the conversation context
         this.setCCAndToEmailsFromLastChat();
-        // Reset Copilot editor state (includes cancelling ongoing generation)
-        this.copilot.reset();
+        // Copilot state is not reset here: reset() deletes the stored generation, which must
+        // survive a conversation switch. useCopilotReply watches the conversation itself.
       }
 
       if (this.isOnPrivateNote) {
@@ -1320,7 +1320,6 @@ export default {
           @focus="onFocus"
           @blur="onBlur"
           @clear-selection="clearEditorSelection"
-          @close="copilot.showEditor.value = false"
           @content-ready="copilot.setContentReady"
         />
         <WootMessageEditor
