@@ -1,5 +1,14 @@
-import { getters, mutations } from '../../aiGenerations';
+import { actions, getters, mutations } from '../../aiGenerations';
 import types from '../../../mutation-types';
+import ConversationApi from 'dashboard/api/inbox/conversation';
+
+vi.mock('dashboard/api/inbox/conversation', () => ({
+  default: {
+    requestAiGeneration: vi.fn(),
+    fetchAiGeneration: vi.fn(),
+    dismissAiGeneration: vi.fn(),
+  },
+}));
 
 describe('#aiGenerations getters', () => {
   it('returns null when nothing is stored for the conversation', () => {
@@ -77,6 +86,48 @@ describe('#aiGenerations mutations', () => {
     });
   });
 
+  it('ignores a payload older than the stored one', () => {
+    const state = {
+      records: { 'summary:45': { id: 1, status: 'failed', updated_at: 20 } },
+    };
+
+    mutations[types.SET_AI_GENERATION](state, {
+      kind: 'summary',
+      conversationId: 45,
+      record: { id: 1, status: 'pending', updated_at: 10 },
+    });
+
+    expect(state.records['summary:45'].status).toEqual('failed');
+  });
+
+  it('keeps a finished record over an in-progress payload from the same second', () => {
+    const state = {
+      records: { 'summary:45': { id: 1, status: 'failed', updated_at: 20 } },
+    };
+
+    mutations[types.SET_AI_GENERATION](state, {
+      kind: 'summary',
+      conversationId: 45,
+      record: { id: 1, status: 'pending', updated_at: 20 },
+    });
+
+    expect(state.records['summary:45'].status).toEqual('failed');
+  });
+
+  it('applies a newer payload', () => {
+    const state = {
+      records: { 'summary:45': { id: 1, status: 'running', updated_at: 10 } },
+    };
+
+    mutations[types.SET_AI_GENERATION](state, {
+      kind: 'summary',
+      conversationId: 45,
+      record: { id: 1, status: 'completed', updated_at: 20 },
+    });
+
+    expect(state.records['summary:45'].status).toEqual('completed');
+  });
+
   it('removes a record', () => {
     const state = { records: { 'summary:45': { id: 1 } } };
 
@@ -86,5 +137,38 @@ describe('#aiGenerations mutations', () => {
     });
 
     expect(state.records['summary:45']).toBeUndefined();
+  });
+});
+
+describe('#aiGenerations actions', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('dismiss removes the record before the delete request settles', async () => {
+    let settleRequest;
+    ConversationApi.dismissAiGeneration.mockReturnValue(
+      new Promise(resolve => {
+        settleRequest = resolve;
+      })
+    );
+    const commit = vi.fn();
+
+    const dismissal = actions.dismiss(
+      { commit },
+      { kind: 'summary', conversationId: 45 }
+    );
+
+    expect(commit).toHaveBeenCalledWith(types.REMOVE_AI_GENERATION, {
+      kind: 'summary',
+      conversationId: 45,
+    });
+    expect(ConversationApi.dismissAiGeneration).toHaveBeenCalledWith({
+      conversationId: 45,
+      path: 'summarize',
+    });
+
+    settleRequest({});
+    await dismissal;
+
+    expect(commit).toHaveBeenCalledTimes(1);
   });
 });

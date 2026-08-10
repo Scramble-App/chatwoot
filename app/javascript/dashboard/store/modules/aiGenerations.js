@@ -17,6 +17,23 @@ const KIND_PATHS = {
 
 const recordKey = (kind, conversationId) => `${kind}:${conversationId}`;
 
+const IN_PROGRESS_STATUSES = ['pending', 'running'];
+
+// A cable broadcast can land before the response body of the request that queued the job, so an
+// older payload must never replace a newer one. Timestamps have second precision, so a finished
+// record also wins over an in-progress one stamped in the same second.
+const isOutdated = (existing, record) => {
+  if (!existing) return false;
+  if (record.updated_at !== existing.updated_at) {
+    return record.updated_at < existing.updated_at;
+  }
+
+  return (
+    IN_PROGRESS_STATUSES.includes(record.status) &&
+    !IN_PROGRESS_STATUSES.includes(existing.status)
+  );
+};
+
 const state = {
   records: {},
 };
@@ -81,9 +98,12 @@ export const actions = {
 
 export const mutations = {
   [types.SET_AI_GENERATION]($state, { kind, conversationId, record }) {
+    const key = recordKey(kind, conversationId);
+    if (isOutdated($state.records[key], record)) return;
+
     $state.records = {
       ...$state.records,
-      [recordKey(kind, conversationId)]: { ...record, kind, conversationId },
+      [key]: { ...record, kind, conversationId },
     };
   },
 
