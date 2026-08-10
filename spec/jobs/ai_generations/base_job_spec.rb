@@ -78,6 +78,33 @@ RSpec.describe AiGenerations::BaseJob do
     end
   end
 
+  describe 'a generation dismissed while the job runs' do
+    it 'does not store the result and does not broadcast the completion' do
+      allow(answer_service).to receive(:perform) do
+        generation.destroy!
+        'answer nobody is waiting for'
+      end
+
+      # Only the running transition is broadcast; the completed one is skipped.
+      expect(AiGenerations::BroadcastService).to receive(:new).once.and_call_original
+
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(AiGenerations::KnowledgeAnswer.exists?(generation.id)).to be(false)
+    end
+
+    it 'does not broadcast a failure either' do
+      allow(answer_service).to receive(:perform) do
+        generation.destroy!
+        raise KnowledgeAnswers::AnswerService::Error, 'No knowledge base results found in Onyx'
+      end
+
+      expect(AiGenerations::BroadcastService).to receive(:new).once.and_call_original
+
+      expect { AiGenerations::KnowledgeAnswerJob.perform_now(generation.id) }.not_to raise_error
+    end
+  end
+
   describe 'queue' do
     it 'runs on the high queue so operators are not stuck behind background work' do
       expect(AiGenerations::KnowledgeAnswerJob.new.queue_name).to eq('high')

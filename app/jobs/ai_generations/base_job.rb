@@ -14,15 +14,25 @@ class AiGenerations::BaseJob < ApplicationJob
     generation.mark_running!
     broadcast(generation)
 
-    generation.complete!(generate(generation))
+    content = generate(generation)
+    return if dismissed?(generation)
+
+    generation.complete!(content)
     broadcast(generation)
   rescue StandardError => e
+    Rails.logger.error("[ai-generation] #{self.class.name} #{e.class}: #{e.message}")
+    return if dismissed?(generation)
+
     generation.fail!(error_message_for(e))
     broadcast(generation)
-    Rails.logger.error("[ai-generation] #{self.class.name} #{e.class}: #{e.message}")
   end
 
-  # Наследник возвращает сгенерированный текст. Исключения обрабатываются в run.
+  # The operator dismissed the generation while the job was running, so the result is no longer wanted.
+  def dismissed?(generation)
+    !self.class::MODEL.exists?(generation.id)
+  end
+
+  # Subclasses return the generated text. Exceptions are handled in run.
   def generate(_generation)
     raise NotImplementedError
   end
@@ -31,7 +41,7 @@ class AiGenerations::BaseJob < ApplicationJob
     AiGenerations::BroadcastService.new(generation: generation, event_name: self.class::EVENT).perform
   end
 
-  # Ожидаемые ошибки сервисов показываем оператору как есть, остальное скрываем за общим текстом.
+  # Expected service errors are shown to the operator as they are; anything else hides behind a generic message.
   def error_message_for(error)
     self.class::EXPECTED_ERRORS.include?(error.class.name) ? error.message : I18n.t('ai_generations.generic_error')
   end
