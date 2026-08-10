@@ -96,26 +96,19 @@ class ConversationApi extends ApiClient {
     return axios.post(`${this.url}/${conversationId}/unmute`);
   }
 
-  prepareReply({ conversationId, content }) {
-    return axios.post(`${this.url}/${conversationId}/prepare_reply`, {
-      content,
-    });
-  }
-
-  summarize(conversationId, signal) {
+  requestAiGeneration({ conversationId, path, content }) {
     return axios.post(
-      `${this.url}/${conversationId}/summarize`,
-      {},
-      { signal }
+      `${this.url}/${conversationId}/${path}`,
+      content === undefined ? {} : { content }
     );
   }
 
-  knowledgeAnswer(conversationId, signal) {
-    return axios.post(
-      `${this.url}/${conversationId}/knowledge_answer`,
-      {},
-      { signal }
-    );
+  fetchAiGeneration({ conversationId, path }) {
+    return axios.get(`${this.url}/${conversationId}/${path}`);
+  }
+
+  dismissAiGeneration({ conversationId, path }) {
+    return axios.delete(`${this.url}/${conversationId}/${path}`);
   }
 
   linkCustomerIdentitySuggestion({ conversationId }) {
