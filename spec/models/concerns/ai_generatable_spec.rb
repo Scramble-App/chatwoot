@@ -94,6 +94,36 @@ RSpec.describe AiGeneratable do
     end
   end
 
+  describe 'owner deletion' do
+    let!(:summary) { create(:ai_generation_summary) }
+    let!(:knowledge_answer) do
+      create(:ai_generation_knowledge_answer, account: summary.account, conversation: summary.conversation, user: summary.user)
+    end
+    let!(:prepared_reply) do
+      create(:ai_generation_prepared_reply, account: summary.account, conversation: summary.conversation, user: summary.user)
+    end
+
+    it 'lets the conversation be destroyed and takes the generations with it' do
+      expect { summary.conversation.destroy! }.not_to raise_error
+
+      expect(AiGenerations::Summary.exists?(summary.id)).to be(false)
+      expect(AiGenerations::KnowledgeAnswer.exists?(knowledge_answer.id)).to be(false)
+      expect(AiGenerations::PreparedReply.exists?(prepared_reply.id)).to be(false)
+    end
+
+    it 'lets the requesting user be destroyed and takes the generations with it' do
+      expect { summary.user.destroy! }.not_to raise_error
+
+      expect(AiGenerations::Summary.exists?(summary.id)).to be(false)
+      expect(AiGenerations::KnowledgeAnswer.exists?(knowledge_answer.id)).to be(false)
+      expect(AiGenerations::PreparedReply.exists?(prepared_reply.id)).to be(false)
+    end
+
+    it 'lets the account be destroyed' do
+      expect { summary.account.destroy! }.not_to raise_error
+    end
+  end
+
   describe 'uniqueness' do
     it 'allows only one record per conversation and user' do
       duplicate = build(:ai_generation_summary, account: generation.account, conversation: generation.conversation, user: generation.user)

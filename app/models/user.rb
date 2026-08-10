@@ -85,6 +85,10 @@ class User < ApplicationRecord
   encrypts :otp_backup_codes
 
   has_many :account_users, dependent: :destroy_async
+  # These are destroyed inline because their tables carry a restricting foreign key on user_id.
+  has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
+  has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
+  has_many :ai_generation_summaries, class_name: 'AiGenerations::Summary', dependent: :destroy
   has_many :accounts, through: :account_users
   accepts_nested_attributes_for :account_users
 
