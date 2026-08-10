@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import CopilotEditor from 'dashboard/components/widgets/WootWriter/CopilotEditor.vue';
 import CaptainLoader from 'dashboard/components/widgets/conversation/copilot/CaptainLoader.vue';
 
-defineProps({
+const props = defineProps({
   showCopilotEditor: {
     type: Boolean,
     default: false,
@@ -44,6 +44,12 @@ const clearEditorSelection = () => {
   emit('clearSelection');
 };
 
+// Announced for the editor only, so the loading state does not mark the content ready.
+const onAfterEnter = () => {
+  if (props.showCopilotEditor && !props.isGeneratingContent)
+    emit('contentReady');
+};
+
 const onSend = () => {
   emit('send', copilotEditorContent.value);
   copilotEditorContent.value = '';
@@ -52,6 +58,7 @@ const onSend = () => {
 
 <template>
   <Transition
+    appear
     mode="out-in"
     enter-active-class="transition-all duration-300 ease-out"
     enter-from-class="opacity-0 translate-y-2 scale-[0.98]"
@@ -59,7 +66,7 @@ const onSend = () => {
     leave-active-class="transition-all duration-200 ease-in"
     leave-from-class="opacity-100 translate-y-0 scale-100"
     leave-to-class="opacity-0 translate-y-2 scale-[0.98]"
-    @after-enter="emit('contentReady')"
+    @after-enter="onAfterEnter"
   >
     <CopilotEditor
       v-if="showCopilotEditor && !isGeneratingContent"

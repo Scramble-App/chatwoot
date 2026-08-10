@@ -16,7 +16,9 @@ describe('#ConversationAPI', () => {
     expect(conversationAPI).toHaveProperty('toggleTyping');
     expect(conversationAPI).toHaveProperty('mute');
     expect(conversationAPI).toHaveProperty('unmute');
-    expect(conversationAPI).toHaveProperty('prepareReply');
+    expect(conversationAPI).toHaveProperty('requestAiGeneration');
+    expect(conversationAPI).toHaveProperty('fetchAiGeneration');
+    expect(conversationAPI).toHaveProperty('dismissAiGeneration');
     expect(conversationAPI).toHaveProperty('linkCustomerIdentitySuggestion');
     expect(conversationAPI).toHaveProperty('dismissCustomerIdentitySuggestion');
     expect(conversationAPI).toHaveProperty('meta');
@@ -146,23 +148,35 @@ describe('#ConversationAPI', () => {
       );
     });
 
-    it('#prepareReply', () => {
-      conversationAPI.prepareReply({
+    it('#requestAiGeneration', () => {
+      conversationAPI.requestAiGeneration({
         conversationId: 45,
-        content: 'Please try again.',
+        path: 'prepare_reply',
+        content: 'draft',
       });
       expect(axiosMock.post).toHaveBeenCalledWith(
         '/api/v1/conversations/45/prepare_reply',
-        { content: 'Please try again.' }
+        { content: 'draft' }
       );
     });
 
-    it('#summarize', () => {
-      conversationAPI.summarize(45);
-      expect(axiosMock.post).toHaveBeenCalledWith(
-        '/api/v1/conversations/45/summarize',
-        {},
-        { signal: undefined }
+    it('#fetchAiGeneration', () => {
+      conversationAPI.fetchAiGeneration({
+        conversationId: 45,
+        path: 'knowledge_answer',
+      });
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/conversations/45/knowledge_answer'
+      );
+    });
+
+    it('#dismissAiGeneration', () => {
+      conversationAPI.dismissAiGeneration({
+        conversationId: 45,
+        path: 'summarize',
+      });
+      expect(axiosMock.delete).toHaveBeenCalledWith(
+        '/api/v1/conversations/45/summarize'
       );
     });
 

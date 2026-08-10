@@ -38,6 +38,9 @@ module Events::Types
   REPLY_CREATED = 'reply.created'
   MESSAGE_UPDATED = 'message.updated'
   MESSAGE_TRANSLATION_UPDATED = 'message.translation_updated'
+  CONVERSATION_SUMMARY_UPDATED = 'conversation.summary_updated'
+  KNOWLEDGE_ANSWER_UPDATED = 'conversation.knowledge_answer_updated'
+  PREPARED_REPLY_UPDATED = 'conversation.prepared_reply_updated'
 
   # contact events
   CONTACT_CREATED = 'contact.created'

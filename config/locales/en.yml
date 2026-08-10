@@ -31,6 +31,9 @@
 
 en:
   hello: 'Hello world'
+  ai_generations:
+    generic_error: 'Failed to generate. Please try again.'
+    stale: 'Generation timed out. Please try again.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

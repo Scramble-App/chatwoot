@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_02_090001) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_07_090000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -175,6 +175,49 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_090001) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id"], name: "index_agent_capacity_policies_on_account_id"
+  end
+
+  create_table "ai_generation_knowledge_answers", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "status", default: 0, null: false
+    t.text "content"
+    t.text "error_message"
+    t.string "provider", default: "openai", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_ai_generation_knowledge_answers_on_account_id"
+    t.index ["conversation_id", "user_id"], name: "idx_on_conversation_id_user_id_54bcc587b2", unique: true
+  end
+
+  create_table "ai_generation_prepared_replies", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "status", default: 0, null: false
+    t.text "content"
+    t.text "error_message"
+    t.string "provider", default: "openai", null: false
+    t.text "source_content"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_ai_generation_prepared_replies_on_account_id"
+    t.index ["conversation_id", "user_id"], name: "idx_on_conversation_id_user_id_226bcd6d47", unique: true
+  end
+
+  create_table "ai_generation_summaries", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "status", default: 0, null: false
+    t.text "content"
+    t.text "error_message"
+    t.string "provider", default: "openai", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_ai_generation_summaries_on_account_id"
+    t.index ["conversation_id", "user_id"], name: "index_ai_generation_summaries_on_conversation_id_and_user_id", unique: true
   end
 
   create_table "applied_slas", force: :cascade do |t|
@@ -1402,6 +1445,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_02_090001) do
   add_foreign_key "account_user_working_hours", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "ai_generation_knowledge_answers", "accounts"
+  add_foreign_key "ai_generation_knowledge_answers", "conversations"
+  add_foreign_key "ai_generation_knowledge_answers", "users"
+  add_foreign_key "ai_generation_prepared_replies", "accounts"
+  add_foreign_key "ai_generation_prepared_replies", "conversations"
+  add_foreign_key "ai_generation_prepared_replies", "users"
+  add_foreign_key "ai_generation_summaries", "accounts"
+  add_foreign_key "ai_generation_summaries", "conversations"
+  add_foreign_key "ai_generation_summaries", "users"
   add_foreign_key "conversation_assignment_events", "accounts"
   add_foreign_key "conversation_assignment_events", "conversations"
   add_foreign_key "conversation_assignment_events", "inboxes"

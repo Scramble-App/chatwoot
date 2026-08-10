@@ -1,12 +1,12 @@
-import { ref, computed } from 'vue';
-import ConversationApi from 'dashboard/api/inbox/conversation';
-import { useMapGetter } from 'dashboard/composables/store.js';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useStore, useMapGetter } from 'dashboard/composables/store.js';
 import { useAlert, useTrack } from 'dashboard/composables';
+import { emitter } from 'shared/helpers/mitt';
+import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { CAPTAIN_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
-import {
-  CAPTAIN_ERROR_TYPES,
-  CAPTAIN_GENERATION_FAILURE_REASONS,
-} from 'dashboard/composables/captain/constants';
+import { CAPTAIN_GENERATION_FAILURE_REASONS } from 'dashboard/composables/captain/constants';
+import { KINDS, KIND_LIST } from 'dashboard/store/modules/aiGenerations';
 
 // Actions that map to REWRITE events (with operation attribute)
 const REWRITE_ACTIONS = [
@@ -22,6 +22,20 @@ const REWRITE_ACTIONS = [
   'simplify',
 ];
 
+const ACTION_KINDS = {
+  summarize: KINDS.SUMMARY,
+  knowledge_answer: KINDS.KNOWLEDGE_ANSWER,
+  prepare_answer: KINDS.PREPARED_REPLY,
+};
+
+const KIND_ACTIONS = {
+  [KINDS.SUMMARY]: 'summarize',
+  [KINDS.KNOWLEDGE_ANSWER]: 'knowledge_answer',
+  [KINDS.PREPARED_REPLY]: 'prepare_answer',
+};
+
+const IN_PROGRESS_STATUSES = ['pending', 'running'];
+
 /**
  * Gets the event key suffix based on action type.
  * @param {string} action - The action type
@@ -30,6 +44,7 @@ const REWRITE_ACTIONS = [
 function getEventPrefix(action) {
   if (action === 'summarize') return 'SUMMARIZE';
   if (action === 'knowledge_answer') return 'REPLY_SUGGESTION';
+  if (action === 'prepare_answer') return 'REPLY_SUGGESTION';
   if (action === 'reply_suggestion') return 'REPLY_SUGGESTION';
   return 'REWRITE';
 }
@@ -38,61 +53,70 @@ function getEventPrefix(action) {
  * Builds the analytics payload based on action type.
  * @param {string} action - The action type
  * @param {number} conversationId - The conversation ID
- * @param {number} [followUpCount] - Optional follow-up count
  * @returns {Object} The payload object
  */
-function buildPayload(action, conversationId, followUpCount = undefined) {
+function buildPayload(action, conversationId) {
   const payload = { conversationId };
 
-  // Add operation for rewrite actions
   if (REWRITE_ACTIONS.includes(action)) {
     payload.operation = action;
-  }
-
-  // Add followUpCount if provided
-  if (followUpCount !== undefined) {
-    payload.followUpCount = followUpCount;
   }
 
   return payload;
 }
 
-function trackGenerationFailure({
-  action,
-  conversationId,
-  followUpCount = undefined,
-  stage,
-  reason,
-}) {
+/**
+ * Emits the generation failure event.
+ * @param {Object} params - Failure details
+ * @param {string} params.action - The action type
+ * @param {number} params.conversationId - The conversation ID
+ * @param {string} params.stage - Where the failure happened
+ * @param {string} params.reason - The failure reason
+ */
+function trackGenerationFailure({ action, conversationId, stage, reason }) {
   useTrack(CAPTAIN_EVENTS.GENERATION_FAILED, {
-    ...buildPayload(action, conversationId, followUpCount),
+    ...buildPayload(action, conversationId),
     stage,
     reason,
   });
 }
 
 /**
- * Composable for managing Copilot reply generation state and actions.
- * Extracts copilot-related logic from ReplyBox for cleaner code organization.
+ * Composable exposing the async AI generation for the selected conversation.
+ * State lives in the aiGenerations store module so it survives navigation.
  *
  * @returns {Object} Copilot reply state and methods
  */
 export function useCopilotReply() {
+  const store = useStore();
+  const { t } = useI18n();
   const currentChat = useMapGetter('getSelectedChat');
-
-  const showEditor = ref(false);
-  const isGenerating = ref(false);
-  const isContentReady = ref(false);
-  const generatedContent = ref('');
-  const followUpContext = ref(null);
-  const abortController = ref(null);
-
-  // Tracking state
-  const currentAction = ref(null);
-  const followUpCount = ref(0);
-  const trackedConversationId = ref(null);
-
   const conversationId = computed(() => currentChat.value?.id);
+
+  const isContentReady = ref(false);
+  const isEditorDismissed = ref(false);
+
+  const record = computed(() =>
+    conversationId.value
+      ? store.getters['aiGenerations/active'](conversationId.value)
+      : null
+  );
+
+  const currentAction = computed(() =>
+    record.value ? KIND_ACTIONS[record.value.kind] : null
+  );
+
+  const isGenerating = computed(() =>
+    IN_PROGRESS_STATUSES.includes(record.value?.status)
+  );
+
+  const generatedContent = computed(() =>
+    record.value?.status === 'completed' ? record.value.content : ''
+  );
+
+  const showEditor = computed(
+    () => Boolean(record.value) && !isEditorDismissed.value
+  );
 
   const isActive = computed(() => showEditor.value || isGenerating.value);
   const isButtonDisabled = computed(
@@ -102,43 +126,112 @@ export function useCopilotReply() {
     isActive.value ? 'copilot' : 'rich'
   );
 
+  const fetchAll = () => {
+    if (!conversationId.value) return;
+
+    store.dispatch('aiGenerations/fetchAll', {
+      conversationId: conversationId.value,
+    });
+  };
+
+  watch(conversationId, () => {
+    isEditorDismissed.value = false;
+    // isContentReady is left alone: a conversation that already holds a completed generation
+    // renders it without an enter transition, so nothing would set the flag again.
+    fetchAll();
+  });
+
+  onMounted(() => {
+    fetchAll();
+    emitter.on(BUS_EVENTS.WEBSOCKET_RECONNECT, fetchAll);
+  });
+
+  onUnmounted(() => {
+    emitter.off(BUS_EVENTS.WEBSOCKET_RECONNECT, fetchAll);
+  });
+
+  // Every kind of the current conversation, not just the most recently updated one, so a
+  // second failure is still surfaced and a completed record is still counted.
+  const conversationRecords = computed(() =>
+    conversationId.value
+      ? KIND_LIST.map(kind =>
+          store.getters['aiGenerations/get'](kind, conversationId.value)
+        ).filter(Boolean)
+      : []
+  );
+
+  // Generations already reported to analytics, keyed by kind and record id.
+  const trackedGenerations = new Set();
+
+  const handleFailedGeneration = generation => {
+    useAlert(generation.error_message);
+    trackGenerationFailure({
+      action: KIND_ACTIONS[generation.kind],
+      conversationId: generation.conversationId,
+      stage: 'initial',
+      reason: generation.error_message
+        ? CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION
+        : CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
+    });
+    // Removed so it does not reappear when the operator returns to the conversation.
+    store.dispatch('aiGenerations/dismiss', {
+      kind: generation.kind,
+      conversationId: generation.conversationId,
+    });
+  };
+
+  const handleCompletedGeneration = generation => {
+    const key = `${generation.kind}:${generation.id}`;
+    if (!generation.content || trackedGenerations.has(key)) return;
+
+    trackedGenerations.add(key);
+    const action = KIND_ACTIONS[generation.kind];
+    useTrack(
+      CAPTAIN_EVENTS[`${getEventPrefix(action)}_USED`],
+      buildPayload(action, generation.conversationId)
+    );
+  };
+
+  watch(conversationRecords, generations => {
+    generations.forEach(generation => {
+      if (generation.status === 'failed') handleFailedGeneration(generation);
+      if (generation.status === 'completed')
+        handleCompletedGeneration(generation);
+    });
+  });
+
   /**
-   * Resets all copilot editor state and cancels any ongoing generation.
+   * Discards the current suggestion. The stored generation is deleted so it
+   * stays dismissed when the operator returns to the conversation.
    * @param {boolean} [trackDismiss=true] - Whether to track dismiss event
    */
   function reset(trackDismiss = true) {
-    // Track dismiss event if there was content and we're not accepting
-    if (trackDismiss && generatedContent.value && currentAction.value) {
+    const current = record.value;
+
+    if (trackDismiss && current?.content && currentAction.value) {
       const eventKey = `${getEventPrefix(currentAction.value)}_DISMISSED`;
       useTrack(
         CAPTAIN_EVENTS[eventKey],
-        buildPayload(
-          currentAction.value,
-          trackedConversationId.value,
-          followUpCount.value
-        )
+        buildPayload(currentAction.value, current.conversationId)
       );
     }
 
-    if (abortController.value) {
-      abortController.value.abort();
-      abortController.value = null;
-    }
-    showEditor.value = false;
-    isGenerating.value = false;
     isContentReady.value = false;
-    generatedContent.value = '';
-    followUpContext.value = null;
-    currentAction.value = null;
-    followUpCount.value = 0;
-    trackedConversationId.value = null;
+    isEditorDismissed.value = false;
+
+    if (!current) return;
+
+    store.dispatch('aiGenerations/dismiss', {
+      kind: current.kind,
+      conversationId: current.conversationId,
+    });
   }
 
   /**
    * Toggles the copilot editor visibility.
    */
   function toggleEditor() {
-    showEditor.value = !showEditor.value;
+    isEditorDismissed.value = !isEditorDismissed.value;
   }
 
   /**
@@ -148,214 +241,35 @@ export function useCopilotReply() {
     isContentReady.value = true;
   }
 
-  const handleAPIError = error => {
-    if (
-      error.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
-      error.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
-    ) {
-      return;
-    }
-
-    const errorMessage =
-      error.response?.data?.error ||
-      error.response?.data?.errors?.[0] ||
-      'Failed to generate content. Please try again.';
-    useAlert(errorMessage);
-  };
-
-  const getErrorType = error => {
-    if (
-      error.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
-      error.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
-    ) {
-      return CAPTAIN_ERROR_TYPES.ABORTED;
-    }
-    if (error.response?.status) {
-      return `${CAPTAIN_ERROR_TYPES.HTTP_PREFIX}${error.response.status}`;
-    }
-    return CAPTAIN_ERROR_TYPES.API_ERROR;
-  };
-
-  const processEvent = async (type, options = {}) => {
-    if (!['summarize', 'knowledge_answer'].includes(type)) {
-      return {
-        message: '',
-        errorType: CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
-      };
-    }
-
-    try {
-      const { data } =
-        type === 'knowledge_answer'
-          ? await ConversationApi.knowledgeAnswer(
-              conversationId.value,
-              options.signal
-            )
-          : await ConversationApi.summarize(
-              conversationId.value,
-              options.signal
-            );
-      return { message: data.content };
-    } catch (error) {
-      handleAPIError(error);
-      return { message: '', errorType: getErrorType(error) };
-    }
-  };
-
   /**
-   * Executes a copilot action (e.g., improve, fix grammar).
+   * Starts an AI generation. Returns as soon as the job is queued.
    * @param {string} action - The action type
-   * @param {string} data - The content to process
+   * @param {string} [data] - Operator draft, used by prepare_answer
    */
-  async function execute(action) {
-    // Reset without tracking dismiss (starting new action)
-    reset(false);
-    const requestController = new AbortController();
-    abortController.value = requestController;
-    isGenerating.value = true;
+  async function execute(action, data) {
+    const kind = ACTION_KINDS[action];
+    if (!kind || !conversationId.value) return;
+
     isContentReady.value = false;
-    currentAction.value = action;
-    followUpCount.value = 0;
-    trackedConversationId.value = conversationId.value;
+    isEditorDismissed.value = false;
 
     try {
-      const {
-        message: content,
-        followUpContext: newContext,
-        errorType,
-      } = await processEvent(action, {
-        signal: requestController.signal,
+      await store.dispatch('aiGenerations/request', {
+        kind,
+        conversationId: conversationId.value,
+        content: kind === KINDS.PREPARED_REPLY ? data : undefined,
       });
-
-      if (requestController.signal.aborted) return;
-      if (errorType === CAPTAIN_ERROR_TYPES.ABORTED) {
-        if (abortController.value === requestController) {
-          isGenerating.value = false;
-        }
-        return;
-      }
-
-      generatedContent.value = content;
-      followUpContext.value = newContext;
-      if (content) {
-        showEditor.value = true;
-        // Track "Used" event on successful generation
-        const eventKey = `${getEventPrefix(action)}_USED`;
-        useTrack(
-          CAPTAIN_EVENTS[eventKey],
-          buildPayload(action, trackedConversationId.value)
-        );
-      } else if (errorType && errorType !== CAPTAIN_ERROR_TYPES.ABORTED) {
-        trackGenerationFailure({
-          action,
-          conversationId: trackedConversationId.value,
-          stage: 'initial',
-          reason: errorType,
-        });
-      } else {
-        trackGenerationFailure({
-          action,
-          conversationId: trackedConversationId.value,
-          stage: 'initial',
-          reason: CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
-        });
-      }
-      isGenerating.value = false;
     } catch (error) {
-      if (
-        requestController.signal.aborted ||
-        error?.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
-        error?.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
-      ) {
-        return;
-      }
+      useAlert(
+        error.response?.data?.error ||
+          t('CONVERSATION.REPLYBOX.COPILOT_GENERATION_ERROR')
+      );
       trackGenerationFailure({
         action,
-        conversationId: trackedConversationId.value,
+        conversationId: conversationId.value,
         stage: 'initial',
-        reason: error?.name || CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION,
+        reason: CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION,
       });
-      isGenerating.value = false;
-    } finally {
-      if (abortController.value === requestController) {
-        abortController.value = null;
-      }
-    }
-  }
-
-  /**
-   * Sends a follow-up message to refine the current generated content.
-   * @param {string} message - The follow-up message from the user
-   */
-  async function sendFollowUp(message) {
-    if (!followUpContext.value || !message.trim()) return;
-
-    const requestController = new AbortController();
-    abortController.value = requestController;
-    isGenerating.value = true;
-    isContentReady.value = false;
-
-    // Track follow-up sent event
-    useTrack(CAPTAIN_EVENTS.FOLLOW_UP_SENT, {
-      conversationId: trackedConversationId.value,
-    });
-    followUpCount.value += 1;
-
-    try {
-      const content = '';
-      const updatedContext = followUpContext.value;
-      const errorType = CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE;
-
-      if (requestController.signal.aborted) return;
-      if (errorType === CAPTAIN_ERROR_TYPES.ABORTED) {
-        if (abortController.value === requestController) {
-          isGenerating.value = false;
-        }
-        return;
-      }
-
-      if (content) {
-        generatedContent.value = content;
-        followUpContext.value = updatedContext;
-        showEditor.value = true;
-      } else if (errorType && errorType !== CAPTAIN_ERROR_TYPES.ABORTED) {
-        trackGenerationFailure({
-          action: currentAction.value,
-          conversationId: trackedConversationId.value,
-          followUpCount: followUpCount.value,
-          stage: 'follow_up',
-          reason: errorType,
-        });
-      } else {
-        trackGenerationFailure({
-          action: currentAction.value,
-          conversationId: trackedConversationId.value,
-          followUpCount: followUpCount.value,
-          stage: 'follow_up',
-          reason: CAPTAIN_GENERATION_FAILURE_REASONS.EMPTY_RESPONSE,
-        });
-      }
-      isGenerating.value = false;
-    } catch (error) {
-      if (
-        requestController.signal.aborted ||
-        error?.name === CAPTAIN_ERROR_TYPES.ABORT_ERROR ||
-        error?.name === CAPTAIN_ERROR_TYPES.CANCELED_ERROR
-      ) {
-        return;
-      }
-      trackGenerationFailure({
-        action: currentAction.value,
-        conversationId: trackedConversationId.value,
-        followUpCount: followUpCount.value,
-        stage: 'follow_up',
-        reason: error?.name || CAPTAIN_GENERATION_FAILURE_REASONS.EXCEPTION,
-      });
-      isGenerating.value = false;
-    } finally {
-      if (abortController.value === requestController) {
-        abortController.value = null;
-      }
     }
   }
 
@@ -366,28 +280,23 @@ export function useCopilotReply() {
    * @returns {string} The content ready for the editor
    */
   function accept() {
-    const content = generatedContent.value;
+    const current = record.value;
+    if (!current) return '';
 
-    // Track "Applied" event
+    const content = current.content;
+
     if (currentAction.value) {
       const eventKey = `${getEventPrefix(currentAction.value)}_APPLIED`;
       useTrack(
         CAPTAIN_EVENTS[eventKey],
-        buildPayload(
-          currentAction.value,
-          trackedConversationId.value,
-          followUpCount.value
-        )
+        buildPayload(currentAction.value, current.conversationId)
       );
     }
 
-    // Reset state without tracking dismiss
-    showEditor.value = false;
-    generatedContent.value = '';
-    followUpContext.value = null;
-    currentAction.value = null;
-    followUpCount.value = 0;
-    trackedConversationId.value = null;
+    store.dispatch('aiGenerations/dismiss', {
+      kind: current.kind,
+      conversationId: current.conversationId,
+    });
 
     return content;
   }
@@ -397,7 +306,6 @@ export function useCopilotReply() {
     isGenerating,
     isContentReady,
     generatedContent,
-    followUpContext,
     currentAction,
 
     isActive,
@@ -408,7 +316,6 @@ export function useCopilotReply() {
     toggleEditor,
     setContentReady,
     execute,
-    sendFollowUp,
     accept,
   };
 }

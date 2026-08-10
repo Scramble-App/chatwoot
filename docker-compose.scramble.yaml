@@ -3,11 +3,13 @@ x-app-environment: &app_environment
   RAILS_ENV: production
   INSTALLATION_ENV: docker
   ACTIVE_STORAGE_SERVICE: s3_compatible
+  RACK_TIMEOUT_SERVICE_TIMEOUT: ${RACK_TIMEOUT_SERVICE_TIMEOUT:-90}
   POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST must be set in .env}
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
   POSTGRES_DATABASE: ${POSTGRES_DATABASE:-chatwoot_production}
   POSTGRES_USERNAME: ${POSTGRES_USERNAME:?POSTGRES_USERNAME must be set in .env}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+  PGSSLMODE: ${PGSSLMODE:-require}
   STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?STORAGE_ACCESS_KEY_ID must be set in .env}
   STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?STORAGE_SECRET_ACCESS_KEY must be set in .env}
   STORAGE_REGION: ${STORAGE_REGION:?STORAGE_REGION must be set in .env}
@@ -51,7 +53,7 @@ services:
           nginx -s reload
         done &
 
-        nginx -g 'daemon off;'
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
     restart: always
 
   rails:

@@ -222,7 +222,6 @@
       "REPLYING_TO": "Replying to:",
       "TIP_EMOJI_ICON": "Show emoji selector",
       "TIP_ATTACH_ICON": "Attach files",
-      "PREPARE_ERROR": "Couldn't prepare this reply. Please try again.",
       "TIP_AUDIORECORDER_ICON": "Record audio",
       "TIP_AUDIORECORDER_PERMISSION": "Allow access to audio",
       "TIP_AUDIORECORDER_ERROR": "Could not open the audio",
@@ -231,6 +230,7 @@
       "STOP_AUDIO_RECORDING": "Stop audio recording",
       "COPILOT_THINKING": "Copilot is thinking",
       "COPILOT_COPY_SUCCESS": "Summary copied to clipboard",
+      "COPILOT_GENERATION_ERROR": "Couldn't start this generation. Please try again.",
       "EMAIL_HEAD": {
         "TO": "TO",
         "ADD_BCC": "Add bcc",

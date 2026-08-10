@@ -60,6 +60,10 @@ class Account < ApplicationRecord
   has_many :account_users, dependent: :destroy_async
   has_many :agent_bot_inboxes, dependent: :destroy_async
   has_many :agent_bots, dependent: :destroy_async
+  # These are destroyed inline because their tables carry a restricting foreign key on account_id.
+  has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
+  has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
+  has_many :ai_generation_summaries, class_name: 'AiGenerations::Summary', dependent: :destroy
   has_many :api_channels, dependent: :destroy_async, class_name: '::Channel::Api'
   has_many :articles, dependent: :destroy_async, class_name: '::Article'
   has_many :assignment_policies, dependent: :destroy_async

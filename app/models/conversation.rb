@@ -114,6 +114,10 @@ class Conversation < ApplicationRecord
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
   has_many :assignment_events, class_name: 'ConversationAssignmentEvent', dependent: :destroy_async
+  # These are destroyed inline because their tables carry a restricting foreign key on conversation_id.
+  has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
+  has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
+  has_many :ai_generation_summaries, class_name: 'AiGenerations::Summary', dependent: :destroy
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
