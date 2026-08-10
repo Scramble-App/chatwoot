@@ -4,6 +4,7 @@ import DashboardAudioNotificationHelper from './AudioAlerts/DashboardAudioNotifi
 import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { emitter } from 'shared/helpers/mitt';
 import { useImpersonation } from 'dashboard/composables/useImpersonation';
+import { KINDS } from 'dashboard/store/modules/aiGenerations';
 
 const { isImpersonating } = useImpersonation();
 
@@ -16,6 +17,9 @@ class ActionCableConnector extends BaseActionCableConnector {
       'message.created': this.onMessageCreated,
       'message.updated': this.onMessageUpdated,
       'message.translation_updated': this.onMessageTranslationUpdated,
+      'conversation.summary_updated': this.onAiSummaryUpdated,
+      'conversation.knowledge_answer_updated': this.onAiKnowledgeAnswerUpdated,
+      'conversation.prepared_reply_updated': this.onAiPreparedReplyUpdated,
       'conversation.created': this.onConversationCreated,
       'conversation.status_changed': this.onStatusChange,
       'user:logout': this.onLogout,
@@ -59,6 +63,27 @@ class ActionCableConnector extends BaseActionCableConnector {
 
   onMessageTranslationUpdated = data => {
     this.app.$store.dispatch('updateMessageTranslation', data);
+  };
+
+  onAiSummaryUpdated = data => {
+    this.app.$store.dispatch('aiGenerations/updateFromEvent', {
+      kind: KINDS.SUMMARY,
+      data,
+    });
+  };
+
+  onAiKnowledgeAnswerUpdated = data => {
+    this.app.$store.dispatch('aiGenerations/updateFromEvent', {
+      kind: KINDS.KNOWLEDGE_ANSWER,
+      data,
+    });
+  };
+
+  onAiPreparedReplyUpdated = data => {
+    this.app.$store.dispatch('aiGenerations/updateFromEvent', {
+      kind: KINDS.PREPARED_REPLY,
+      data,
+    });
   };
 
   onPresenceUpdate = data => {

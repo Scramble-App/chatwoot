@@ -135,7 +135,6 @@ export default {
       showArticleSearchPopover: false,
       hasRecordedAudio: false,
       copilotAcceptedMessages: {},
-      isPreparingReply: false,
     };
   },
   computed: {
@@ -426,14 +425,6 @@ export default {
         (this.isAWhatsAppChannel || this.isAPIInbox) &&
         !this.isOnPrivateNote &&
         !this.currentChat.can_reply
-      );
-    },
-    isPrepareReplyDisabled() {
-      return (
-        this.isEditorDisabled ||
-        this.isMessageEmpty ||
-        this.isPreparingReply ||
-        this.message.length > this.maxLength
       );
     },
   },
@@ -934,34 +925,7 @@ export default {
       this.onFocus();
     },
     executeCopilotAction(action, data) {
-      if (action === 'prepare_answer') {
-        this.prepareReply();
-        return;
-      }
-
       this.copilot.execute(action, data);
-    },
-    async prepareReply() {
-      if (this.isPrepareReplyDisabled) return;
-
-      this.isPreparingReply = true;
-      try {
-        const { content } = await this.$store.dispatch('prepareReply', {
-          conversationId: this.conversationId,
-          content: this.message,
-        });
-        if (content) {
-          this.message = trimContent(content, this.maxLength);
-          this.$nextTick(() => this.messageEditor?.focusEditorInputField());
-        }
-      } catch (error) {
-        const errorMessage =
-          error?.response?.data?.error ||
-          this.$t('CONVERSATION.REPLYBOX.PREPARE_ERROR');
-        useAlert(errorMessage);
-      } finally {
-        this.isPreparingReply = false;
-      }
     },
     clearMessage() {
       this.message = '';
@@ -1292,7 +1256,7 @@ export default {
       :disabled="
         (copilot.isActive.value && copilot.isButtonDisabled.value) ||
         showAudioRecorderEditor ||
-        isPreparingReply
+        copilot.isGenerating.value
       "
       :is-editor-disabled="isEditorDisabled"
       :is-message-length-reaching-threshold="isMessageLengthReachingThreshold"
@@ -1352,14 +1316,12 @@ export default {
           :show-copilot-editor="copilot.showEditor.value"
           :is-generating-content="copilot.isGenerating.value"
           :generated-content="copilot.generatedContent.value"
-          :show-follow-up="!!copilot.followUpContext.value"
           :placeholder="$t('CONVERSATION.FOOTER.COPILOT_MSG_INPUT')"
           @focus="onFocus"
           @blur="onBlur"
           @clear-selection="clearEditorSelection"
           @close="copilot.showEditor.value = false"
           @content-ready="copilot.setContentReady"
-          @send="copilot.sendFollowUp"
         />
         <WootMessageEditor
           v-else-if="!showAudioRecorderEditor"
