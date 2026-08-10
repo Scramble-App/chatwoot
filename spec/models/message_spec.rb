@@ -16,6 +16,16 @@ RSpec.describe Message do
     it { is_expected.to validate_presence_of(:account_id) }
   end
 
+  describe 'destroying a message' do
+    it 'removes its translations instead of tripping their foreign key' do
+      message = create(:message)
+      MessageTranslation.create!(account: message.account, message: message, target_locale: 'ru', status: :completed, content: 'перевод')
+
+      expect { message.destroy! }.not_to raise_error
+      expect(MessageTranslation.where(message_id: message.id)).to be_empty
+    end
+  end
+
   describe 'length validations' do
     let!(:message) { create(:message) }
 

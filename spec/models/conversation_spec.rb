@@ -22,6 +22,16 @@ RSpec.describe Conversation do
     it { is_expected.to have_many(:assignment_events) }
   end
 
+  describe 'destroying a conversation' do
+    it 'removes its assignment events instead of tripping their foreign key' do
+      conversation = create(:conversation)
+      create(:conversation_assignment_event, conversation: conversation)
+
+      expect { conversation.destroy! }.not_to raise_error
+      expect(ConversationAssignmentEvent.where(conversation_id: conversation.id)).to be_empty
+    end
+  end
+
   describe 'concerns' do
     it_behaves_like 'assignment_handler'
     it_behaves_like 'auto_assignment_handler'

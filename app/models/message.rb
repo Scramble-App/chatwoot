@@ -133,7 +133,11 @@ class Message < ApplicationRecord
   has_many :attachments, dependent: :destroy, autosave: true, before_add: :validate_attachments_limit
   has_one :csat_survey_response, dependent: :destroy_async
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
-  has_many :message_translations, dependent: :destroy_async
+  # Deleted inline: message_translations carries a restricting foreign key on message_id, and
+  # destroy_async enqueues the child deletion from an after_commit callback — the parent DELETE
+  # would reach the database while these rows still reference it. delete_all because the model
+  # has no destroy callbacks.
+  has_many :message_translations, dependent: :delete_all
 
   after_create_commit :execute_after_create_commit_callbacks
 
