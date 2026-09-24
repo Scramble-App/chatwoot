@@ -64,7 +64,7 @@ describe('#actions', () => {
 
       expect(commit.mock.calls).toEqual([
         [SET_TEAM_MEMBERS_UI_FLAG, { isUpdating: true }],
-        [ADD_AGENTS_TO_TEAM, { data: teamMembers }],
+        [ADD_AGENTS_TO_TEAM, { teamId: 1, data: teamMembers }],
         [SET_TEAM_MEMBERS_UI_FLAG, { isUpdating: false }],
       ]);
     });

@@ -43,6 +43,7 @@ describe('#TeamsAPI', () => {
         '/api/v1/teams/1/team_members',
         {
           user_ids: { user_ids: [1, 10, 21] },
+          team_lead_ids: [],
         }
       );
     });
@@ -57,6 +58,7 @@ describe('#TeamsAPI', () => {
         '/api/v1/teams/1/team_members',
         {
           user_ids: agentsList,
+          team_lead_ids: [],
         }
       );
     });
