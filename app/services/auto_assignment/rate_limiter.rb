@@ -1,7 +1,10 @@
 class AutoAssignment::RateLimiter
   pattr_initialize [:inbox!, :agent!]
 
+  # Only an assignment policy's fair distribution limit caps assignments; without one there is no limit
   def within_limit?
+    return true if config&.fair_distribution_limit.blank?
+
     current_count < limit
   end
 
@@ -18,7 +21,7 @@ class AutoAssignment::RateLimiter
   private
 
   def limit
-    config&.fair_distribution_limit.present? ? config.fair_distribution_limit.to_i : 5
+    config.fair_distribution_limit.to_i
   end
 
   def window
