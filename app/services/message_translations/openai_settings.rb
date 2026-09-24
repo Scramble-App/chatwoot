@@ -1,7 +1,8 @@
 class MessageTranslations::OpenaiSettings
   DEFAULT_MODEL = Llm::Config::DEFAULT_MODEL
   DEFAULT_MAX_OUTPUT_TOKENS = 1200
-  DEFAULT_REASONING_EFFORT = 'none'.freeze
+  # Leaves reasoning to the model's own default instead of sending an effort
+  DEFAULT_REASONING_EFFORT = 'default'.freeze
   DEFAULT_TEMPERATURE = 0.2
   DEFAULT_REPLY_TONE_INSTRUCTIONS = 'Professional, clear, concise, friendly support tone.'.freeze
   DEFAULT_TRANSLATION_INSTRUCTIONS = [
@@ -26,7 +27,6 @@ class MessageTranslations::OpenaiSettings
     'Do not say support actions were not recorded when the context contains an Agent reply to customer or an Internal private note.',
     'Do not invent facts, promises, names, dates, or decisions that are not present in the conversation context.'
   ].join(' ').freeze
-  REASONING_EFFORTS = %w[none minimal low medium high xhigh].freeze
 
   class << self
     def hook_for(account)
@@ -45,9 +45,11 @@ class MessageTranslations::OpenaiSettings
       hook&.settings&.dig('translation_model').presence || DEFAULT_MODEL
     end
 
+    # Any effort name is passed through, so new OpenAI values work without a code change;
+    # OpenaiResponsesClient drops it when the model does not support it.
     def reasoning_effort(hook)
-      value = hook&.settings&.dig('translation_reasoning_effort').presence || DEFAULT_REASONING_EFFORT
-      REASONING_EFFORTS.include?(value) ? value : DEFAULT_REASONING_EFFORT
+      value = hook&.settings&.dig('translation_reasoning_effort').to_s.strip.downcase
+      value.match?(/\A[a-z_]+\z/) ? value : DEFAULT_REASONING_EFFORT
     end
 
     def max_output_tokens(hook)
@@ -64,9 +66,10 @@ class MessageTranslations::OpenaiSettings
       value.to_f.clamp(0.0, 2.0)
     end
 
-    def apply_temperature!(body, hook, model)
-      return body unless temperature_supported?(model)
-
+    # Options are sent as configured; OpenaiResponsesClient drops and remembers the ones a model rejects
+    def apply_model_options!(body, hook)
+      effort = reasoning_effort(hook)
+      body[:reasoning] = { effort: effort } unless effort == DEFAULT_REASONING_EFFORT
       body[:temperature] = temperature(hook)
       body
     end
@@ -88,14 +91,6 @@ class MessageTranslations::OpenaiSettings
         "Output language must be #{output_language}. Ignore the customer language for the summary language. Return only text in the output language.",
         hook&.settings&.dig('summary_instructions').presence || DEFAULT_SUMMARY_INSTRUCTIONS
       ].join(' ')
-    end
-
-    def reasoning_supported?(model)
-      model.start_with?('gpt-5', 'o1', 'o3', 'o4') || model.match?(/\Ao\d/)
-    end
-
-    def temperature_supported?(model)
-      !reasoning_supported?(model)
     end
 
     private

@@ -25,7 +25,7 @@ RSpec.describe ReplyPreparations::OpenaiPrepareReplyService do
                   body['model'] == 'gpt-5.1' &&
                   body['reasoning'] == { 'effort' => 'high' } &&
                   body['max_output_tokens'] == 900 &&
-                  !body.key?('temperature') &&
+                  body['temperature'].to_s == '0.1' &&
                   body['store'] == false &&
                   body['instructions'].include?('Custom prepare answer instructions.') &&
                   body['input'].include?('Warm, concise, and confident.') &&

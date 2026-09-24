@@ -11,6 +11,10 @@ class HookPolicy < ApplicationPolicy
     true
   end
 
+  def openai_models?
+    @account_user.administrator?
+  end
+
   def destroy?
     @account_user.administrator?
   end

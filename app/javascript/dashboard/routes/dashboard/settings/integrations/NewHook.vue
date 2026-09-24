@@ -5,6 +5,7 @@ import { useAlert } from 'dashboard/composables';
 import { useIntegrationHook } from 'dashboard/composables/useIntegrationHook';
 import { FormKit } from '@formkit/vue';
 import { useBranding } from 'shared/composables/useBranding';
+import IntegrationsAPI from 'dashboard/api/integrations';
 
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
@@ -41,6 +42,7 @@ export default {
       endPoint: '',
       alertMessage: '',
       values: {},
+      openaiModels: [],
     };
   },
   computed: {
@@ -71,8 +73,24 @@ export default {
     sensitiveProperties() {
       return this.integration.sensitive_properties || [];
     },
+    // Free-text fields offer these values as suggestions but accept anything typed
+    suggestionLists() {
+      const lists = {};
+      (this.integration.settings_form_schema || []).forEach(item => {
+        if (item.suggestions) lists[item.name] = item.suggestions;
+      });
+      if (this.openaiModels.length) {
+        lists.translation_model = this.openaiModels;
+      }
+      return lists;
+    },
     formItems() {
-      const items = this.integration.settings_form_schema || [];
+      const items = (this.integration.settings_form_schema || []).map(
+        ({ suggestions, ...item }) =>
+          this.suggestionLists[item.name]
+            ? { ...item, list: `${item.name}-suggestions` }
+            : item
+      );
       if (!this.isEditMode) return items;
 
       return items.map(item => {
@@ -110,10 +128,19 @@ export default {
     this.values = {
       ...(this.hook.settings || {}),
     };
+    if (this.integration.id === 'openai') this.fetchOpenaiModels();
   },
   methods: {
     onClose() {
       this.$emit('close');
+    },
+    async fetchOpenaiModels() {
+      try {
+        const { data } = await IntegrationsAPI.openaiModels(this.hook.id);
+        this.openaiModels = data.payload;
+      } catch {
+        // Suggestions are optional, the model ID can still be typed
+      }
     },
     buildHookPayload() {
       const hookPayload = {
@@ -229,6 +256,13 @@ export default {
         />
       </div>
     </FormKit>
+    <datalist
+      v-for="(options, name) in suggestionLists"
+      :id="`${name}-suggestions`"
+      :key="name"
+    >
+      <option v-for="option in options" :key="option" :value="option" />
+    </datalist>
   </div>
 </template>
 

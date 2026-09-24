@@ -24,6 +24,12 @@ class Api::V1::Accounts::Integrations::HooksController < Api::V1::Accounts::Base
     end
   end
 
+  def openai_models
+    return head :unprocessable_entity unless @hook.openai?
+
+    render json: { payload: Integrations::Openai::ModelList.fetch(@hook.settings['api_key']) }
+  end
+
   def destroy
     @hook.destroy!
     head :ok
