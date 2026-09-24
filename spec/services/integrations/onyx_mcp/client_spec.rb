@@ -12,6 +12,8 @@ RSpec.describe Integrations::OnyxMcp::Client do
     )
   end
 
+  # Each example stubs the full MCP handshake (initialize, notification, tool call)
+  # rubocop:disable RSpec/ExampleLength
   it 'initializes an MCP session and calls search_indexed_documents' do
     initialize_request = stub_request(:post, 'https://cloud.onyx.app/mcp')
                          .with do |req|
@@ -140,4 +142,5 @@ RSpec.describe Integrations::OnyxMcp::Client do
     expect(failed_tool_request).to have_been_requested
     expect(fallback_tool_request).to have_been_requested
   end
+  # rubocop:enable RSpec/ExampleLength
 end

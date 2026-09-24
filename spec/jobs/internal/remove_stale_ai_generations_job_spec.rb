@@ -6,7 +6,7 @@ RSpec.describe Internal::RemoveStaleAiGenerationsJob do
     old_answer = create(:ai_generation_knowledge_answer)
     old_reply = create(:ai_generation_prepared_reply)
     [old_summary, old_answer, old_reply].each do |generation|
-      generation.update_column(:updated_at, (described_class::RETENTION + 1.day).ago)
+      generation.update!(updated_at: (described_class::RETENTION + 1.day).ago)
     end
 
     described_class.perform_now
