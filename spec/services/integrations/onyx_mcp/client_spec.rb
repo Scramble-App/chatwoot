@@ -143,4 +143,18 @@ RSpec.describe Integrations::OnyxMcp::Client do
     expect(fallback_tool_request).to have_been_requested
   end
   # rubocop:enable RSpec/ExampleLength
+
+  it 'waits up to 60 seconds for each MCP request' do
+    stub_request(:post, 'https://cloud.onyx.app/mcp')
+      .to_return(status: 200, body: { jsonrpc: '2.0', id: 1, result: {} }.to_json, headers: { 'Content-Type' => 'application/json' })
+    connections = []
+    allow(Faraday).to receive(:new).and_wrap_original do |original, *args, &block|
+      original.call(*args, &block).tap { |connection| connections << connection }
+    end
+
+    described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5)
+
+    # initialize, notifications/initialized and tools/call
+    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 60]] * 3)
+  end
 end
