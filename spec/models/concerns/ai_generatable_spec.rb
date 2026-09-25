@@ -58,14 +58,14 @@ RSpec.describe AiGeneratable do
 
     it 'is true once an in-progress record is older than STALE_TIMEOUT' do
       generation.mark_running!
-      generation.update_column(:updated_at, (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
+      generation.update!(updated_at: (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
 
       expect(generation).to be_stale
     end
 
     it 'is false for a completed record regardless of age' do
       generation.complete!('text')
-      generation.update_column(:updated_at, 1.year.ago)
+      generation.update!(updated_at: 1.year.ago)
 
       expect(generation).not_to be_stale
     end
@@ -87,7 +87,7 @@ RSpec.describe AiGeneratable do
 
     it 'reports a stale record as failed with a timeout message' do
       generation.mark_running!
-      generation.update_column(:updated_at, (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
+      generation.update!(updated_at: (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
 
       expect(generation.push_event_data[:status]).to eq('failed')
       expect(generation.push_event_data[:error_message]).to eq(I18n.t('ai_generations.stale'))

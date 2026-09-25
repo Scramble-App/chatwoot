@@ -143,6 +143,7 @@ class Integrations::OnyxMcp::Client
     {}
   end
 
+  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   def parse_sse_response(body)
     events = body.to_s.split(/\n{2,}/).filter_map do |event|
       data = event.lines.filter_map do |line|
@@ -160,6 +161,7 @@ class Integrations::OnyxMcp::Client
 
     events.reverse.find { |event| event['result'].present? || event['error'].present? || event['id'].present? } || {}
   end
+  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
   def connection
     Faraday.new do |f|

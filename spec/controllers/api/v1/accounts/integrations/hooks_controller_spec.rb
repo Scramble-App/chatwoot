@@ -77,7 +77,8 @@ RSpec.describe 'Integration Hooks API', type: :request do
 
       it 'preserves an existing OpenAI API key when updating editable settings' do
         allow(Integrations::Openai::KeyValidator).to receive(:valid?).and_return(true)
-        openai_hook = create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-existing', 'translation_model' => 'gpt-old' })
+        openai_hook = create(:integrations_hook, :openai, account: account,
+                                                          settings: { 'api_key' => 'sk-existing', 'translation_model' => 'gpt-old' })
 
         patch api_v1_account_integrations_hook_url(account_id: account.id, id: openai_hook.id),
               params: {

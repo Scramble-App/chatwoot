@@ -7,6 +7,7 @@ class KnowledgeAnswers::AnswerService
 
   pattr_initialize [:conversation!, :user!]
 
+  # rubocop:disable Metrics/MethodLength
   def perform
     openai_hook = MessageTranslations::OpenaiSettings.hook_for(conversation.account)
     raise Error, 'OpenAI integration is not configured' if openai_hook.blank?
@@ -34,6 +35,7 @@ class KnowledgeAnswers::AnswerService
       output_language: output_language_label
     ).perform
   end
+  # rubocop:enable Metrics/MethodLength
 
   private
 
@@ -89,6 +91,7 @@ class KnowledgeAnswers::AnswerService
     selected.join("\n\n")
   end
 
+  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/AbcSize
   def documents_from(onyx_result)
     direct_documents = onyx_result&.dig('documents')
     return direct_documents if direct_documents.present?
@@ -126,6 +129,7 @@ class KnowledgeAnswers::AnswerService
       "Content: #{content}"
     ].compact.join("\n")
   end
+  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/AbcSize
 
   def output_language_label
     language_label_for(operator_locale) || language_label_for(conversation.account.locale) || conversation.account.locale_english_name

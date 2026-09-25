@@ -43,7 +43,7 @@ RSpec.describe 'Conversation Knowledge Answers API', type: :request do
     it 'enqueues again when the in-progress generation went stale' do
       generation = create(:ai_generation_knowledge_answer, account: account, conversation: conversation, user: agent)
       generation.mark_running!
-      generation.update_column(:updated_at, (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
+      generation.update!(updated_at: (AiGeneratable::STALE_TIMEOUT + 1.minute).ago)
 
       expect do
         post url, headers: agent.create_new_auth_token, as: :json
