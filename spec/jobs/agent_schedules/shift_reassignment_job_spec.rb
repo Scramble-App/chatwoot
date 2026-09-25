@@ -153,4 +153,24 @@ RSpec.describe AgentSchedules::ShiftReassignmentJob, type: :job do
       expect(conversation.reload.assignee_id).to eq(agent.id)
     end
   end
+
+  # User destroys its account_users asynchronously, so they can outlive the user
+  context 'when a scheduled account user belongs to a deleted user' do
+    before do
+      deleted_user = create(:user, account: account, role: :agent)
+      deleted_user.account_users.find_by!(account_id: account.id).update!(schedule_enabled: true, schedule_timezone: 'UTC')
+      User.where(id: deleted_user.id).delete_all
+    end
+
+    it 'still hands over and assigns conversations' do
+      assigned_conversation = create(:conversation, account: account, inbox: inbox, team: team, assignee: agent, status: :open)
+      unassigned_conversation = create(:conversation, account: account, inbox: inbox, team: team, assignee: nil, status: :open)
+      put_on_shift(on_shift_agent)
+
+      described_class.perform_now
+
+      expect([assigned_conversation, unassigned_conversation].map { |conversation| conversation.reload.assignee_id })
+        .to all(eq(on_shift_agent.id))
+    end
+  end
 end
