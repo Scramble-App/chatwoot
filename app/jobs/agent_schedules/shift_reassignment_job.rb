@@ -20,8 +20,10 @@ class AgentSchedules::ShiftReassignmentJob < ApplicationJob
 
   # Conversations of an agent whose shift ended move straight to an available agent.
   # When nobody is available they stay with the current agent and are retried on the next run.
+  # The join skips account_users of deleted users, which User removes asynchronously.
   def reassign_off_shift_conversations
-    AccountUser.where(schedule_enabled: true).includes(:account, :user, :working_hours, :schedule_exceptions).find_each do |account_user|
+    AccountUser.where(schedule_enabled: true).joins(:user).includes(:account, :user, :working_hours, :schedule_exceptions)
+               .find_each do |account_user|
       next if account_user.schedule_available_at?
 
       eligible_conversations(account_user).find_each do |conversation|
