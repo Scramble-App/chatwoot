@@ -28,6 +28,8 @@ RSpec.describe Integrations::App do
 
     before do
       allow(Current).to receive(:account).and_return(account)
+      # Earlier specs leave SLACK_CLIENT_ID in the config cache after their records roll back
+      GlobalConfig.clear_cache
     end
 
     context 'when the app is slack' do
