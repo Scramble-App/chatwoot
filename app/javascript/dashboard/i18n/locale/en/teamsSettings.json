@@ -120,7 +120,7 @@
         "LABEL": "Allow auto assign for this team."
       },
       "SHIFT_REASSIGN": {
-        "LABEL": "Unassign non-resolved conversations when an agent shift ends."
+        "LABEL": "Move non-resolved conversations to an available agent when an agent shift ends."
       },
       "SUBMIT_CREATE": "Create team"
     }

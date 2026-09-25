@@ -54,45 +54,4 @@ module Enterprise::AutoAssignment::AssignmentService
   def account
     inbox.account
   end
-
-  # Override to apply exclusion rules
-  def unassigned_conversations(limit)
-    scope = inbox.conversations.unassigned.open
-
-    # Apply exclusion rules from capacity policy or assignment policy
-    scope = apply_exclusion_rules(scope)
-
-    # Apply conversation priority using enum methods if policy exists
-    scope = if policy&.longest_waiting?
-              scope.reorder(last_activity_at: :asc, created_at: :asc)
-            else
-              scope.reorder(created_at: :asc)
-            end
-
-    scope.limit(limit)
-  end
-
-  def apply_exclusion_rules(scope)
-    capacity_policy = inbox.inbox_capacity_limits.first&.agent_capacity_policy
-    return scope unless capacity_policy
-
-    exclusion_rules = capacity_policy.exclusion_rules || {}
-    scope = apply_label_exclusions(scope, exclusion_rules['excluded_labels'])
-    apply_age_exclusions(scope, exclusion_rules['exclude_older_than_hours'])
-  end
-
-  def apply_label_exclusions(scope, excluded_labels)
-    return scope if excluded_labels.blank?
-
-    scope.tagged_with(excluded_labels, exclude: true, on: :labels)
-  end
-
-  def apply_age_exclusions(scope, hours_threshold)
-    return scope if hours_threshold.blank?
-
-    hours = hours_threshold.to_i
-    return scope unless hours.positive?
-
-    scope.where('conversations.created_at >= ?', hours.hours.ago)
-  end
 end

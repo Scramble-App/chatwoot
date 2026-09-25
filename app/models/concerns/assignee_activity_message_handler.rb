@@ -13,10 +13,19 @@ module AssigneeActivityMessageHandler
   end
 
   def generate_assignee_change_activity_content(user_name)
+    return shift_reassignment_activity_content(user_name) if assignee_id && Current.assignment_event_source == 'shift_end'
+
     params = { assignee_name: assignee&.name || '', user_name: user_name }
     key = assignee_id ? 'assigned' : 'removed'
     key = 'self_assigned' if self_assign? assignee_id
     I18n.t("conversations.activity.assignee.#{key}", **params)
+  end
+
+  def shift_reassignment_activity_content(user_name)
+    I18n.t('conversations.activity.assignee.shift_reassigned',
+           previous_assignee_name: User.find_by(id: assignee_id_before_last_save)&.name,
+           assignee_name: assignee.name,
+           user_name: user_name)
   end
 
   def activity_message_owner(user_name)

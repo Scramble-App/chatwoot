@@ -25,7 +25,9 @@ RSpec.describe AutoAssignment::RateLimiter do
         allow(inbox).to receive(:assignment_policy).and_return(nil)
       end
 
-      it 'returns true' do
+      it 'returns true however many conversations were assigned' do
+        create_list(:conversation, 5, inbox: inbox).each { |assigned| rate_limiter.track_assignment(assigned) }
+
         expect(rate_limiter.within_limit?).to be true
       end
     end

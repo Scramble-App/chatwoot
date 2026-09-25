@@ -14,6 +14,16 @@ class AutoAssignment::AssignmentService
     assigned_count
   end
 
+  # Moves an already assigned conversation (e.g. of an agent whose shift ended) to an available agent.
+  # Picking an agent takes a moment, so the block re-checks the reloaded conversation right before the update.
+  # Returns false and keeps the current assignee when nobody is available or the block declines.
+  def reassign(conversation)
+    agent = find_available_agent(conversation)
+    return false unless agent && yield(conversation.reload)
+
+    assign_conversation(conversation, agent)
+  end
+
   private
 
   def perform_for_conversation(conversation)
