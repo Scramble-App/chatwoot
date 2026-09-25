@@ -1,8 +1,6 @@
 class ReplyPreparations::OpenaiPrepareReplyService
   class Error < StandardError; end
 
-  TIMEOUT_SECONDS = 30
-
   attr_reader :model
 
   def initialize(hook:, content:, customer_context:)
@@ -22,12 +20,7 @@ class ReplyPreparations::OpenaiPrepareReplyService
   attr_reader :hook, :content, :customer_context
 
   def make_request
-    response = connection.post("#{Integrations::Openai::KeyValidator.api_base}/responses") do |req|
-      req.headers['Authorization'] = "Bearer #{hook.settings['api_key']}"
-      req.headers['Content-Type'] = 'application/json'
-      req.body = request_body.to_json
-    end
-    parsed_body = parse_response_body(response.body)
+    response, parsed_body = MessageTranslations::OpenaiResponsesClient.new(api_key: hook.settings['api_key']).create(request_body)
 
     return parsed_body if response.success?
 
@@ -43,12 +36,7 @@ class ReplyPreparations::OpenaiPrepareReplyService
       store: false
     }
 
-    MessageTranslations::OpenaiSettings.apply_temperature!(body, hook, model)
-
-    reasoning_effort = MessageTranslations::OpenaiSettings.reasoning_effort(hook)
-    body[:reasoning] = { effort: reasoning_effort } if reasoning_effort != 'none' && MessageTranslations::OpenaiSettings.reasoning_supported?(model)
-
-    body
+    MessageTranslations::OpenaiSettings.apply_model_options!(body, hook)
   end
 
   def instructions
@@ -78,18 +66,5 @@ class ReplyPreparations::OpenaiPrepareReplyService
     end
 
     nil
-  end
-
-  def parse_response_body(body)
-    JSON.parse(body)
-  rescue JSON::ParserError
-    {}
-  end
-
-  def connection
-    Faraday.new do |f|
-      f.options.timeout = TIMEOUT_SECONDS
-      f.options.open_timeout = TIMEOUT_SECONDS
-    end
   end
 end

@@ -40,11 +40,7 @@ openai:
           'translation_enabled': { 'type': 'boolean' },
           'auto_translate_incoming': { 'type': 'boolean' },
           'translation_model': { 'type': 'string' },
-          'translation_reasoning_effort':
-            {
-              'type': 'string',
-              'enum': ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
-            },
+          'translation_reasoning_effort': { 'type': 'string' },
           'translation_max_output_tokens': { 'type': ['integer', 'string'] },
           'translation_temperature': { 'type': ['number', 'string'] },
           'reply_tone_instructions': { 'type': 'string' },
@@ -88,21 +84,15 @@ openai:
         'type': 'text',
         'name': 'translation_model',
         'placeholder': 'gpt-4.1-mini',
-        'help': 'OpenAI model used for operator-only incoming message translations',
+        'help': 'Any OpenAI model ID. After the API key is saved, models available to it are suggested here. Used for translations, Prepare, Summary, and knowledge answers',
       },
       {
         'label': 'Translation reasoning effort',
-        'type': 'select',
+        'type': 'text',
         'name': 'translation_reasoning_effort',
-        'default': 'none',
-        'options': [
-          { 'label': 'None', 'value': 'none' },
-          { 'label': 'Minimal', 'value': 'minimal' },
-          { 'label': 'Low', 'value': 'low' },
-          { 'label': 'Medium', 'value': 'medium' },
-          { 'label': 'High', 'value': 'high' },
-          { 'label': 'Extra high', 'value': 'xhigh' },
-        ],
+        'placeholder': 'default',
+        'help': 'Leave empty or use default to let OpenAI decide, or enter an effort such as none, low, medium, high, xhigh, or max. Values the selected model does not support are skipped automatically',
+        'suggestions': ['default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
       },
       {
         'label': 'Translation max output tokens',
@@ -114,7 +104,7 @@ openai:
         'label': 'Translation temperature',
         'type': 'number',
         'name': 'translation_temperature',
-        'help': 'Default is 0.2',
+        'help': 'Default is 0.2. Skipped automatically for models that do not support it, such as reasoning models',
       },
       {
         'label': 'Reply tone instructions',

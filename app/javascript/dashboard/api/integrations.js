@@ -40,6 +40,12 @@ class IntegrationsAPI extends ApiClient {
     return axios.delete(`${this.baseUrl()}/integrations/hooks/${hookId}`);
   }
 
+  openaiModels(hookId) {
+    return axios.get(
+      `${this.baseUrl()}/integrations/hooks/${hookId}/openai_models`
+    );
+  }
+
   connectShopify({ shopDomain }) {
     return axios.post(`${this.baseUrl()}/integrations/shopify/auth`, {
       shop_domain: shopDomain,

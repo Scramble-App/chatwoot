@@ -1,8 +1,6 @@
 class MessageTranslations::OpenaiTranslationService
   class Error < StandardError; end
 
-  TIMEOUT_SECONDS = 30
-
   attr_reader :model
 
   def self.source_text_for(message)
@@ -33,12 +31,7 @@ class MessageTranslations::OpenaiTranslationService
   attr_reader :hook, :message, :target_locale
 
   def make_request(source_text)
-    response = connection.post("#{Integrations::Openai::KeyValidator.api_base}/responses") do |req|
-      req.headers['Authorization'] = "Bearer #{hook.settings['api_key']}"
-      req.headers['Content-Type'] = 'application/json'
-      req.body = request_body(source_text).to_json
-    end
-    parsed_body = parse_response_body(response.body)
+    response, parsed_body = MessageTranslations::OpenaiResponsesClient.new(api_key: hook.settings['api_key']).create(request_body(source_text))
 
     return parsed_body if response.success?
 
@@ -54,12 +47,7 @@ class MessageTranslations::OpenaiTranslationService
       store: false
     }
 
-    MessageTranslations::OpenaiSettings.apply_temperature!(body, hook, model)
-
-    reasoning_effort = MessageTranslations::OpenaiSettings.reasoning_effort(hook)
-    body[:reasoning] = { effort: reasoning_effort } if reasoning_effort != 'none' && MessageTranslations::OpenaiSettings.reasoning_supported?(model)
-
-    body
+    MessageTranslations::OpenaiSettings.apply_model_options!(body, hook)
   end
 
   def instructions
@@ -85,18 +73,5 @@ class MessageTranslations::OpenaiTranslationService
     end
 
     nil
-  end
-
-  def parse_response_body(body)
-    JSON.parse(body)
-  rescue JSON::ParserError
-    {}
-  end
-
-  def connection
-    Faraday.new do |f|
-      f.options.timeout = TIMEOUT_SECONDS
-      f.options.open_timeout = TIMEOUT_SECONDS
-    end
   end
 end

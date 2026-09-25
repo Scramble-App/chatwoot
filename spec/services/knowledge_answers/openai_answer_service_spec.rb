@@ -35,7 +35,7 @@ RSpec.describe KnowledgeAnswers::OpenaiAnswerService do
                   body['model'] == 'gpt-5.1' &&
                   body['reasoning'] == { 'effort' => 'high' } &&
                   body['max_output_tokens'] == 900 &&
-                  !body.key?('temperature') &&
+                  body['temperature'].to_s == '0.1' &&
                   body['store'] == false &&
                   body['instructions'].include?('Output language must be Russian (ru)') &&
                   body['instructions'].include?('Use only approved knowledge base facts.') &&
