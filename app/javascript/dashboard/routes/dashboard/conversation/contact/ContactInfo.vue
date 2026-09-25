@@ -17,6 +17,7 @@ import ComposeConversation from 'dashboard/components-next/NewConversation/Compo
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import VoiceCallButton from 'dashboard/components-next/Contacts/VoiceCallButton.vue';
 import InlineInput from 'dashboard/components-next/inline-input/InlineInput.vue';
+import { trustedCsAdminUrl } from 'dashboard/helper/csAdminHelper';
 
 export default {
   components: {
@@ -63,6 +64,12 @@ export default {
     additionalAttributes() {
       return this.contact.additional_attributes || {};
     },
+    // "Customer Dashboard URL" contact attribute, filled in by the back office
+    csAdminUrl() {
+      return trustedCsAdminUrl(
+        this.contact.custom_attributes?.customer_dashboard_url
+      );
+    },
     location() {
       const {
         country = '',
@@ -105,6 +112,9 @@ export default {
     dynamicTime,
     toggleEditModal() {
       this.showEditModal = !this.showEditModal;
+    },
+    openCsAdmin() {
+      window.open(this.csAdminUrl, '_blank', 'noopener,noreferrer');
     },
     findCountryFlag(countryCode, cityAndCountry) {
       try {
@@ -289,6 +299,15 @@ export default {
           />
           <SocialIcons :social-profiles="socialProfiles" />
         </div>
+        <NextButton
+          v-if="csAdminUrl"
+          :label="$t('CONTACT_PANEL.OPEN_CS_ADMIN')"
+          icon="i-lucide-external-link"
+          sm
+          faded
+          blue
+          @click="openCsAdmin"
+        />
       </div>
       <div class="flex items-center w-full mt-0.5 gap-2">
         <ComposeConversation :contact-id="String(contact.id)">
