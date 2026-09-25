@@ -2,7 +2,7 @@
 # models reject temperature), so a rejected optional param is dropped and the request is retried without it.
 # An "Unsupported" rejection is remembered per model and reasoning effort, so later requests skip that param up front.
 class MessageTranslations::OpenaiResponsesClient
-  TIMEOUT_SECONDS = 30
+  TIMEOUT_SECONDS = 60
   OPTIONAL_PARAMS = %w[temperature top_p reasoning max_output_tokens].freeze
 
   def initialize(api_key:)

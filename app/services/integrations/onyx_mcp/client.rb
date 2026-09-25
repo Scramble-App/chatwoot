@@ -2,7 +2,7 @@ class Integrations::OnyxMcp::Client
   class Error < StandardError; end
 
   PROTOCOL_VERSION = '2025-06-18'.freeze
-  TIMEOUT_SECONDS = 30
+  TIMEOUT_SECONDS = 60
 
   def initialize(hook:)
     @hook = hook
