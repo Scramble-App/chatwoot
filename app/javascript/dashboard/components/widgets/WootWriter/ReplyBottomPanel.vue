@@ -12,10 +12,11 @@ import VideoCallButton from '../VideoCallButton.vue';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
 import { mapGetters } from 'vuex';
 import NextButton from 'dashboard/components-next/button/Button.vue';
+import DictationButton from './DictationButton.vue';
 
 export default {
   name: 'ReplyBottomPanel',
-  components: { NextButton, FileUpload, VideoCallButton },
+  components: { NextButton, FileUpload, VideoCallButton, DictationButton },
   mixins: [inboxMixin],
   props: {
     isNote: {
@@ -176,6 +177,7 @@ export default {
       accountId: 'getCurrentAccountId',
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       uiFlags: 'integrations/getUIFlags',
+      appIntegrations: 'integrations/getAppIntegrations',
     }),
     wrapClass() {
       return {
@@ -186,8 +188,14 @@ export default {
       if (this.isEditorDisabled) return false;
       return this.showFileUpload || this.isNote;
     },
+    // With OpenAI set up, the microphone dictates the reply instead of recording a voice message
+    isDictationAvailable() {
+      return this.appIntegrations.some(
+        integration => integration.id === 'openai' && integration.hooks.length
+      );
+    },
     showAudioRecorderButton() {
-      if (this.isEditorDisabled) return false;
+      if (this.isEditorDisabled || this.isDictationAvailable) return false;
       if (this.isALineChannel || this.isATiktokChannel) {
         return false;
       }
@@ -271,6 +279,7 @@ export default {
   },
   mounted() {
     ActiveStorage.start();
+    if (!this.appIntegrations.length) this.$store.dispatch('integrations/get');
   },
   methods: {
     toggleMessageSignature() {
@@ -320,6 +329,10 @@ export default {
           sm
         />
       </FileUpload>
+      <DictationButton
+        v-if="isDictationAvailable && !isEditorDisabled"
+        :conversation-id="conversationId"
+      />
       <NextButton
         v-if="showAudioRecorderButton"
         v-tooltip.top-end="$t('CONVERSATION.REPLYBOX.TIP_AUDIORECORDER_ICON')"

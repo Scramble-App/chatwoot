@@ -111,6 +111,12 @@ class ConversationApi extends ApiClient {
     return axios.delete(`${this.url}/${conversationId}/${path}`);
   }
 
+  transcribeDictation({ conversationId, audio, fileName }) {
+    const formData = new FormData();
+    formData.append('audio', audio, fileName);
+    return axios.post(`${this.url}/${conversationId}/dictation`, formData);
+  }
+
   linkCustomerIdentitySuggestion({ conversationId }) {
     return axios.post(
       `${this.url}/${conversationId}/customer_identity_suggestion/link`

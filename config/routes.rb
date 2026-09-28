@@ -145,6 +145,7 @@ Rails.application.routes.draw do
               resource :reply_preparation, path: :prepare_reply, only: [:create, :show, :destroy]
               resource :summary, path: :summarize, only: [:create, :show, :destroy]
               resource :knowledge_answer, only: [:create, :show, :destroy]
+              resource :dictation, only: [:create]
               resource :customer_identity_suggestion, only: [] do
                 post :link
                 post :dismiss

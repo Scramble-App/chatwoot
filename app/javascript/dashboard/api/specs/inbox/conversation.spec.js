@@ -19,6 +19,7 @@ describe('#ConversationAPI', () => {
     expect(conversationAPI).toHaveProperty('requestAiGeneration');
     expect(conversationAPI).toHaveProperty('fetchAiGeneration');
     expect(conversationAPI).toHaveProperty('dismissAiGeneration');
+    expect(conversationAPI).toHaveProperty('transcribeDictation');
     expect(conversationAPI).toHaveProperty('linkCustomerIdentitySuggestion');
     expect(conversationAPI).toHaveProperty('dismissCustomerIdentitySuggestion');
     expect(conversationAPI).toHaveProperty('meta');
@@ -178,6 +179,20 @@ describe('#ConversationAPI', () => {
       expect(axiosMock.delete).toHaveBeenCalledWith(
         '/api/v1/conversations/45/summarize'
       );
+    });
+
+    it('#transcribeDictation', () => {
+      const audio = new Blob(['audio'], { type: 'audio/webm' });
+
+      conversationAPI.transcribeDictation({
+        conversationId: 45,
+        audio,
+        fileName: 'dictation.webm',
+      });
+
+      const [url, formData] = axiosMock.post.mock.calls.at(-1);
+      expect(url).toBe('/api/v1/conversations/45/dictation');
+      expect(formData.get('audio').name).toBe('dictation.webm');
     });
 
     it('#linkCustomerIdentitySuggestion', () => {
