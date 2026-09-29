@@ -66,6 +66,19 @@ RSpec.describe ConversationSummaries::SummaryService do
     end
   end
 
+  it 'keeps the newest messages when the conversation is longer than the limit' do
+    stub_const('ConversationSummaries::SummaryService::CONVERSATION_CONTEXT_CHARACTER_LIMIT', 60)
+    create_customer_message("An old question #{'a' * 30}", created_at: 2.minutes.ago)
+    create_customer_message('How do groups A and B differ?', created_at: 1.minute.ago)
+    create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-test' })
+    allow(ConversationSummaries::OpenaiSummaryService).to receive(:new).and_return(openai_service)
+
+    described_class.new(conversation: conversation, user: user).perform
+
+    expect(ConversationSummaries::OpenaiSummaryService).to have_received(:new)
+      .with(hash_including(conversation_context: 'Customer: How do groups A and B differ?'))
+  end
+
   it 'falls back to the account locale when the operator language is blank' do
     account.update!(locale: 'fr')
     create(:message, account: account, inbox: inbox, conversation: conversation, content: 'Bonjour')

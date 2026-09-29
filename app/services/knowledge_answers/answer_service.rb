@@ -44,16 +44,17 @@ class KnowledgeAnswers::AnswerService
     raise Error, "Onyx returned #{documents.size} #{'result'.pluralize(documents.size)} without readable text (fields: #{fields})"
   end
 
+  # Keeps the newest messages, so the customer's current question is never dropped; the text stays oldest to newest
   def conversation_context_text
     selected = []
     character_count = 0
 
-    public_messages_for_context.each do |message|
-      formatted = format_message(message)
+    public_messages_for_context.reverse_each do |message|
+      formatted = format_message(message)&.truncate(CONVERSATION_CONTEXT_CHARACTER_LIMIT)
       next if formatted.blank?
       break if character_count + formatted.length > CONVERSATION_CONTEXT_CHARACTER_LIMIT
 
-      selected << formatted
+      selected.unshift(formatted)
       character_count += formatted.length
     end
 
@@ -80,14 +81,14 @@ class KnowledgeAnswers::AnswerService
     message.incoming? ? 'Customer' : 'Agent reply to customer'
   end
 
+  # Results come most relevant first; one that does not fit is skipped, so an oversized document cannot empty the context
   def knowledge_context_text(documents)
     selected = []
     character_count = 0
 
     documents.each_with_index do |document, index|
-      formatted = format_document(document, index + 1)
-      next if formatted.blank?
-      break if character_count + formatted.length > KNOWLEDGE_CONTEXT_CHARACTER_LIMIT
+      formatted = format_document(document, index + 1)&.truncate(KNOWLEDGE_CONTEXT_CHARACTER_LIMIT)
+      next if formatted.blank? || character_count + formatted.length > KNOWLEDGE_CONTEXT_CHARACTER_LIMIT
 
       selected << formatted
       character_count += formatted.length

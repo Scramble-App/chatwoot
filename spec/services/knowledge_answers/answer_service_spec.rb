@@ -130,6 +130,55 @@ RSpec.describe KnowledgeAnswers::AnswerService do
     expect(openai_kwargs[:knowledge_context]).not_to include('Second result')
   end
 
+  describe 'context limits' do
+    let(:onyx_hook) { create(:integrations_hook, :onyx_mcp, account: account) }
+    let(:openai_kwargs) { {} }
+
+    before do
+      create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-test' })
+      allow(Integrations::OnyxMcp::Client).to receive(:new).with(hook: onyx_hook).and_return(onyx_client)
+      allow(KnowledgeAnswers::OpenaiAnswerService).to receive(:new) do |kwargs|
+        openai_kwargs.merge!(kwargs)
+        openai_service
+      end
+    end
+
+    it 'keeps the newest messages when the conversation is longer than the limit' do
+      stub_const('KnowledgeAnswers::AnswerService::CONVERSATION_CONTEXT_CHARACTER_LIMIT', 60)
+      create_customer_message("An old question #{'a' * 30}", created_at: 2.minutes.ago)
+      create_customer_message('How do groups A and B differ?', created_at: 1.minute.ago)
+      allow(onyx_client).to receive(:search_indexed_documents).and_return('documents' => [{ 'content' => 'Group docs' }])
+
+      described_class.new(conversation: conversation, user: user).perform
+
+      expect(openai_kwargs[:conversation_context]).to eq('Customer: How do groups A and B differ?')
+    end
+
+    it 'skips a document that does not fit instead of dropping the rest' do
+      stub_const('KnowledgeAnswers::AnswerService::KNOWLEDGE_CONTEXT_CHARACTER_LIMIT', 150)
+      create_customer_message('How long do refunds take?', created_at: Time.zone.now)
+      allow(onyx_client).to receive(:search_indexed_documents).and_return(
+        'documents' => [{ 'content' => 'Refunds take 5 days.' }, { 'content' => 'x' * 500 }, { 'content' => 'Cards arrive in 2 days.' }]
+      )
+
+      described_class.new(conversation: conversation, user: user).perform
+
+      expect(openai_kwargs[:knowledge_context]).to include('Refunds take 5 days.', 'Cards arrive in 2 days.')
+      expect(openai_kwargs[:knowledge_context]).not_to include('xxx')
+    end
+
+    it 'shortens an oversized first document instead of reporting no results' do
+      stub_const('KnowledgeAnswers::AnswerService::KNOWLEDGE_CONTEXT_CHARACTER_LIMIT', 150)
+      create_customer_message('How long do refunds take?', created_at: Time.zone.now)
+      allow(onyx_client).to receive(:search_indexed_documents).and_return('documents' => [{ 'content' => "Refunds take 5 days. #{'x' * 500}" }])
+
+      described_class.new(conversation: conversation, user: user).perform
+
+      expect(openai_kwargs[:knowledge_context]).to start_with("Knowledge result 1:\nContent: Refunds take 5 days.")
+      expect(openai_kwargs[:knowledge_context].length).to eq(150)
+    end
+  end
+
   describe 'unexpected Onyx result shapes' do
     let(:onyx_hook) { create(:integrations_hook, :onyx_mcp, account: account) }
 
