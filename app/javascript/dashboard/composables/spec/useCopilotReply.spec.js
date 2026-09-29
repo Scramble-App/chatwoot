@@ -128,8 +128,12 @@ describe('useCopilotReply', () => {
       });
       await nextTick();
 
-      expect(useAlert).toHaveBeenCalledWith('summary failed');
-      expect(useAlert).toHaveBeenCalledWith('knowledge answer failed');
+      expect(useAlert).toHaveBeenCalledWith('summary failed', {
+        duration: 10000,
+      });
+      expect(useAlert).toHaveBeenCalledWith('knowledge answer failed', {
+        duration: 10000,
+      });
       expect(ConversationApi.dismissAiGeneration).toHaveBeenCalledWith({
         conversationId: CONVERSATION_ID,
         path: 'summarize',
@@ -154,7 +158,9 @@ describe('useCopilotReply', () => {
       await nextTick();
 
       expect(copilot.generatedContent.value).toEqual('summary');
-      expect(useAlert).toHaveBeenCalledWith('knowledge answer failed');
+      expect(useAlert).toHaveBeenCalledWith('knowledge answer failed', {
+        duration: 10000,
+      });
     });
   });
 

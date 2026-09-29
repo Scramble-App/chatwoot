@@ -171,4 +171,41 @@ describe('#aiGenerations actions', () => {
 
     expect(commit).toHaveBeenCalledTimes(1);
   });
+
+  it('fetch removes a local record that no longer exists on the server', async () => {
+    ConversationApi.fetchAiGeneration.mockResolvedValue({ status: 204 });
+    const commit = vi.fn();
+
+    await actions.fetch(
+      { commit },
+      { kind: 'knowledge_answer', conversationId: 45 }
+    );
+
+    expect(commit).toHaveBeenCalledWith(types.REMOVE_AI_GENERATION, {
+      kind: 'knowledge_answer',
+      conversationId: 45,
+    });
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetch stores the record the server returns', async () => {
+    const record = { id: 1, status: 'running', updated_at: 10 };
+    ConversationApi.fetchAiGeneration.mockResolvedValue({
+      status: 200,
+      data: record,
+    });
+    const commit = vi.fn();
+
+    await actions.fetch(
+      { commit },
+      { kind: 'knowledge_answer', conversationId: 45 }
+    );
+
+    expect(commit).toHaveBeenCalledWith(types.SET_AI_GENERATION, {
+      kind: 'knowledge_answer',
+      conversationId: 45,
+      record,
+    });
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
 });

@@ -53,6 +53,14 @@ RSpec.describe AiGenerations::BaseJob do
 
       AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
     end
+
+    it 'does not report it to the exception tracker' do
+      allow(ChatwootExceptionTracker).to receive(:new)
+
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(ChatwootExceptionTracker).not_to have_received(:new)
+    end
   end
 
   describe 'an OpenAI request failure' do
@@ -75,8 +83,11 @@ RSpec.describe AiGenerations::BaseJob do
   end
 
   describe 'an unexpected failure' do
+    let(:tracker) { instance_double(ChatwootExceptionTracker, capture_exception: true) }
+
     before do
       allow(answer_service).to receive(:perform).and_raise(StandardError, 'PG::ConnectionBad: could not connect')
+      allow(ChatwootExceptionTracker).to receive(:new).and_return(tracker)
     end
 
     it 'hides the internal detail behind a generic message' do
@@ -84,6 +95,13 @@ RSpec.describe AiGenerations::BaseJob do
 
       expect(generation.reload).to be_failed
       expect(generation.error_message).to eq(I18n.t('ai_generations.generic_error'))
+    end
+
+    it 'reports the error to the exception tracker' do
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(ChatwootExceptionTracker).to have_received(:new).with(an_instance_of(StandardError), account: generation.account)
+      expect(tracker).to have_received(:capture_exception)
     end
   end
 

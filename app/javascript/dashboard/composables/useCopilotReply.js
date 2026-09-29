@@ -35,6 +35,7 @@ const KIND_ACTIONS = {
 };
 
 const IN_PROGRESS_STATUSES = ['pending', 'running'];
+const FAILURE_ALERT_DURATION = 10000;
 
 /**
  * Gets the event key suffix based on action type.
@@ -164,7 +165,8 @@ export function useCopilotReply() {
   const trackedGenerations = new Set();
 
   const handleFailedGeneration = generation => {
-    useAlert(generation.error_message);
+    // The record is dismissed right away, so the toast is the only place the reason is shown
+    useAlert(generation.error_message, { duration: FAILURE_ALERT_DURATION });
     trackGenerationFailure({
       action: KIND_ACTIONS[generation.kind],
       conversationId: generation.conversationId,

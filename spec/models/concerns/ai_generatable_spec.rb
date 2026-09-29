@@ -25,6 +25,13 @@ RSpec.describe AiGeneratable do
       expect(generation.error_message).to be_nil
     end
 
+    it 'shortens content over the limit instead of failing to save it' do
+      generation.complete!('a' * (AiGeneratable::CONTENT_LIMIT + 10))
+
+      expect(generation.reload).to be_completed
+      expect(generation.content.length).to eq(AiGeneratable::CONTENT_LIMIT)
+    end
+
     it 'stores the message on failure' do
       generation.fail!('Onyx MCP is not configured')
 

@@ -33,13 +33,13 @@ const handleSubmit = () => {
 
 <template>
   <div class="flex justify-between items-center p-3 pt-0">
+    <!-- Discard stays enabled while generating, so a job that never finishes cannot lock the reply box -->
     <NextButton
       :label="t('GENERAL.DISCARD')"
       slate
       link
       class="!px-1 hover:!no-underline"
       sm
-      :disabled="isGeneratingContent"
       @click="handleCancel"
     />
     <div class="flex items-center gap-2">
