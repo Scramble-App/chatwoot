@@ -100,7 +100,7 @@ openai:
         'label': 'Translation max output tokens',
         'type': 'number',
         'name': 'translation_max_output_tokens',
-        'help': 'Default is 1200',
+        'help': 'Default is 1200. Reasoning tokens count toward this limit, so raise it for a high reasoning effort',
       },
       {
         'label': 'Translation temperature',

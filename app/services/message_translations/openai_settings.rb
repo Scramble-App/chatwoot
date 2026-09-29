@@ -52,11 +52,12 @@ class MessageTranslations::OpenaiSettings
       value.match?(/\A[a-z_]+\z/) ? value : DEFAULT_REASONING_EFFORT
     end
 
+    # No upper cap: reasoning tokens count toward the limit, and OpenaiResponsesClient drops a value the model rejects
     def max_output_tokens(hook)
       value = hook&.settings&.dig('translation_max_output_tokens').presence
       return DEFAULT_MAX_OUTPUT_TOKENS if value.blank?
 
-      value.to_i.clamp(100, 10_000)
+      [value.to_i, 100].max
     end
 
     def temperature(hook)
