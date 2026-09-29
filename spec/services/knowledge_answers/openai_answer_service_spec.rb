@@ -45,7 +45,13 @@ RSpec.describe KnowledgeAnswers::OpenaiAnswerService do
               end
               .to_return(
                 status: 200,
-                body: { output_text: 'Счет доступен в разделе биллинга.' }.to_json,
+                body: {
+                  status: 'completed',
+                  output: [
+                    { type: 'reasoning', summary: [] },
+                    { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Счет доступен в разделе биллинга.' }] }
+                  ]
+                }.to_json,
                 headers: { 'Content-Type' => 'application/json' }
               )
 

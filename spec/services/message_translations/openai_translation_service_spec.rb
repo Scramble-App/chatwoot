@@ -22,8 +22,17 @@ RSpec.describe MessageTranslations::OpenaiTranslationService do
   before { Redis::Alfred.delete(unsupported_params_key) }
   after { Redis::Alfred.delete(unsupported_params_key) }
 
-  def translation_response
-    { status: 200, body: { output_text: 'Hello, I need help' }.to_json, headers: { 'Content-Type' => 'application/json' } }
+  # The raw API shape: no top-level output_text, a reasoning item before the message
+  def translation_response(status: 'completed', text: 'Hello, I need help', incomplete_details: nil)
+    body = {
+      status: status,
+      incomplete_details: incomplete_details,
+      output: [
+        { type: 'reasoning', summary: [] },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: text }] }
+      ]
+    }
+    { status: 200, body: body.to_json, headers: { 'Content-Type' => 'application/json' } }
   end
 
   def rejection(message, param)
@@ -67,6 +76,28 @@ RSpec.describe MessageTranslations::OpenaiTranslationService do
 
     expect(result).to eq('Hello, I need help')
     expect(request).to have_been_requested
+  end
+
+  it 'rejects a translation cut off by the output token limit' do
+    stub_request(:post, 'https://api.openai.com/v1/responses')
+      .to_return(translation_response(status: 'incomplete', text: 'Hello, I', incomplete_details: { reason: 'max_output_tokens' }))
+
+    expect { described_class.new(hook: hook, message: message, target_locale: 'en').perform }.to(raise_error do |error|
+      expect(error.class.name).to eq('MessageTranslations::OpenaiResponsesClient::Error')
+      expect(error.message).to start_with('OpenAI ran out of output tokens')
+    end)
+  end
+
+  it 'gives up after 60 seconds, before the web request that waits for it is cut off' do
+    stub_request(:post, 'https://api.openai.com/v1/responses').to_return(translation_response)
+    connections = []
+    allow(Faraday).to receive(:new).and_wrap_original do |original, *args, &block|
+      original.call(*args, &block).tap { |connection| connections << connection }
+    end
+
+    described_class.new(hook: hook, message: message, target_locale: 'en').perform
+
+    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 10]])
   end
 
   it 'retries without a param the model rejects and skips it on later requests' do

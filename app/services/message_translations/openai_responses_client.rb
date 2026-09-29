@@ -2,11 +2,49 @@
 # models reject temperature), so a rejected optional param is dropped and the request is retried without it.
 # An "Unsupported" rejection is remembered per model and reasoning effort, so later requests skip that param up front.
 class MessageTranslations::OpenaiResponsesClient
+  class Error < StandardError; end
+
+  # AI generations run in background jobs, so slow reasoning models get up to 2 minutes
   TIMEOUT_SECONDS = 120
+  # An agent's web request waits for these calls, so they must end before rack-timeout (90 s) aborts it
+  WEB_REQUEST_TIMEOUT_SECONDS = 60
+  # A reachable OpenAI accepts the connection in well under a second; waiting longer only delays the error
+  CONNECT_TIMEOUT_SECONDS = 10
   OPTIONAL_PARAMS = %w[temperature top_p reasoning max_output_tokens].freeze
 
-  def initialize(api_key:)
+  # The reply text, or nil when there is none. Raises Error when OpenAI stopped early, so a cut-off reply is never used.
+  # Raw API JSON has no top-level output_text (only the SDKs and some proxies add it), and reasoning items are skipped.
+  def self.output_text(parsed_body)
+    raise Error, unfinished_message(parsed_body) if %w[incomplete failed].include?(parsed_body['status'])
+    return parsed_body['output_text'] if parsed_body['output_text'].present?
+
+    text = message_part(parsed_body, 'output_text')&.dig('text')
+    return text if text.present?
+
+    refusal = message_part(parsed_body, 'refusal')
+    raise Error, "OpenAI declined to answer: #{refusal['refusal']}" if refusal
+
+    nil
+  end
+
+  def self.message_part(parsed_body, type)
+    parts = Array(parsed_body['output']).select { |item| item['type'] == 'message' }.flat_map { |item| Array(item['content']) }
+    parts.find { |part| part['type'] == type }
+  end
+
+  def self.unfinished_message(parsed_body)
+    return "OpenAI failed to answer: #{parsed_body.dig('error', 'message')}" if parsed_body['status'] == 'failed'
+
+    reason = parsed_body.dig('incomplete_details', 'reason')
+    return "OpenAI stopped before finishing the reply (#{reason})" unless reason == 'max_output_tokens'
+
+    "OpenAI ran out of output tokens before finishing the reply. Raise 'Translation max output tokens' or lower the reasoning effort"
+  end
+  private_class_method :message_part, :unfinished_message
+
+  def initialize(api_key:, timeout: TIMEOUT_SECONDS)
     @api_key = api_key
+    @timeout = timeout
   end
 
   # Returns the HTTP response and its parsed JSON body.
@@ -27,14 +65,19 @@ class MessageTranslations::OpenaiResponsesClient
 
   private
 
-  attr_reader :api_key
+  attr_reader :api_key, :timeout
 
+  # Network failures are raised as Error, so the agent sees why the request failed
   def post(request_body)
     connection.post("#{Integrations::Openai::KeyValidator.api_base}/responses") do |req|
       req.headers['Authorization'] = "Bearer #{api_key}"
       req.headers['Content-Type'] = 'application/json'
       req.body = request_body.to_json
     end
+  rescue Faraday::TimeoutError
+    raise Error, "OpenAI didn't respond within #{timeout} seconds. Try a lower 'Translation reasoning effort'"
+  rescue Faraday::ConnectionFailed, Faraday::SSLError => e
+    raise Error, "Couldn't connect to OpenAI: #{e.message}"
   end
 
   # OpenAI names the rejected field in error.param (e.g. "temperature" or "reasoning.effort"); some errors only quote it in the message.
@@ -72,8 +115,8 @@ class MessageTranslations::OpenaiResponsesClient
 
   def connection
     Faraday.new do |f|
-      f.options.timeout = TIMEOUT_SECONDS
-      f.options.open_timeout = TIMEOUT_SECONDS
+      f.options.timeout = timeout
+      f.options.open_timeout = CONNECT_TIMEOUT_SECONDS
     end
   end
 end

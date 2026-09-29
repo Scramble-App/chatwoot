@@ -42,7 +42,7 @@ class MessageTranslations::OpenaiSettings
     end
 
     def model(hook)
-      hook&.settings&.dig('translation_model').presence || DEFAULT_MODEL
+      hook&.settings&.dig('translation_model').to_s.strip.presence || DEFAULT_MODEL
     end
 
     # Any effort name is passed through, so new OpenAI values work without a code change;

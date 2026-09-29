@@ -3,7 +3,8 @@ class AiGenerations::PreparedReplyJob < AiGenerations::BaseJob
   EVENT = Events::Types::PREPARED_REPLY_UPDATED
   EXPECTED_ERRORS = [
     'ReplyPreparations::PrepareReplyService::Error',
-    'ReplyPreparations::OpenaiPrepareReplyService::Error'
+    'ReplyPreparations::OpenaiPrepareReplyService::Error',
+    'MessageTranslations::OpenaiResponsesClient::Error'
   ].freeze
 
   private
