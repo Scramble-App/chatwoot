@@ -144,7 +144,7 @@ RSpec.describe Integrations::OnyxMcp::Client do
   end
   # rubocop:enable RSpec/ExampleLength
 
-  it 'waits up to 60 seconds for each MCP response and 10 seconds for the connection' do
+  it 'waits up to 2 minutes for each MCP response and 10 seconds for the connection' do
     stub_request(:post, 'https://cloud.onyx.app/mcp')
       .to_return(status: 200, body: { jsonrpc: '2.0', id: 1, result: {} }.to_json, headers: { 'Content-Type' => 'application/json' })
     connections = []
@@ -155,7 +155,7 @@ RSpec.describe Integrations::OnyxMcp::Client do
     described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5)
 
     # initialize, notifications/initialized and tools/call
-    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 10]] * 3)
+    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[120, 10]] * 3)
   end
 
   it 'explains when Onyx cannot be reached' do
@@ -174,7 +174,7 @@ RSpec.describe Integrations::OnyxMcp::Client do
     expect { described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5) }
       .to(raise_error do |error|
         expect(error.class.name).to eq('Integrations::OnyxMcp::Client::Error')
-        expect(error.message).to eq("Onyx didn't respond within 60 seconds")
+        expect(error.message).to eq("Onyx didn't respond within 120 seconds")
       end)
   end
 

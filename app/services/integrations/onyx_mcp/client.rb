@@ -2,7 +2,7 @@ class Integrations::OnyxMcp::Client
   class Error < StandardError; end
 
   PROTOCOL_VERSION = '2025-06-18'.freeze
-  TIMEOUT_SECONDS = 60
+  TIMEOUT_SECONDS = 120
   # A reachable Onyx accepts the connection in well under a second; waiting longer only delays the error
   CONNECT_TIMEOUT_SECONDS = 10
 

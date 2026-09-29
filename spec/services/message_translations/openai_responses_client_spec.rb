@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe MessageTranslations::OpenaiResponsesClient do
-  it 'waits up to 60 seconds for OpenAI' do
+  it 'waits up to 2 minutes for OpenAI' do
     stub_request(:post, 'https://api.openai.com/v1/responses').to_return(status: 200, body: {}.to_json)
     connections = []
     allow(Faraday).to receive(:new).and_wrap_original do |original, *args, &block|
@@ -10,6 +10,6 @@ RSpec.describe MessageTranslations::OpenaiResponsesClient do
 
     described_class.new(api_key: 'openai-key').create(model: 'gpt-6-luna', input: 'Hello')
 
-    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 60]])
+    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[120, 120]])
   end
 end
