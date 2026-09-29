@@ -144,7 +144,7 @@ RSpec.describe Integrations::OnyxMcp::Client do
   end
   # rubocop:enable RSpec/ExampleLength
 
-  it 'waits up to 60 seconds for each MCP request' do
+  it 'waits up to 60 seconds for each MCP response and 10 seconds for the connection' do
     stub_request(:post, 'https://cloud.onyx.app/mcp')
       .to_return(status: 200, body: { jsonrpc: '2.0', id: 1, result: {} }.to_json, headers: { 'Content-Type' => 'application/json' })
     connections = []
@@ -155,6 +155,38 @@ RSpec.describe Integrations::OnyxMcp::Client do
     described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5)
 
     # initialize, notifications/initialized and tools/call
-    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 60]] * 3)
+    expect(connections.map { |connection| [connection.options.timeout, connection.options.open_timeout] }).to eq([[60, 10]] * 3)
+  end
+
+  it 'explains when Onyx cannot be reached' do
+    stub_request(:post, 'https://cloud.onyx.app/mcp').to_raise(Net::OpenTimeout)
+
+    expect { described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5) }
+      .to(raise_error do |error|
+        expect(error.class.name).to eq('Integrations::OnyxMcp::Client::Error')
+        expect(error.message).to start_with("Couldn't connect to Onyx at cloud.onyx.app")
+      end)
+  end
+
+  it 'explains when Onyx does not answer in time' do
+    stub_request(:post, 'https://cloud.onyx.app/mcp').to_raise(Net::ReadTimeout)
+
+    expect { described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: [], limit: 5) }
+      .to(raise_error do |error|
+        expect(error.class.name).to eq('Integrations::OnyxMcp::Client::Error')
+        expect(error.message).to eq("Onyx didn't respond within 60 seconds")
+      end)
+  end
+
+  it 'raises the search error that Onyx reports inside a successful result' do
+    body = { jsonrpc: '2.0', id: 1,
+             result: { structuredContent: { error: "Source type 'site' not found. Available: jira, web.", results: [] }, isError: false } }
+    stub_request(:post, 'https://cloud.onyx.app/mcp').to_return(status: 200, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
+
+    expect { described_class.new(hook: hook).search_indexed_documents(query: 'invoice help', source_types: %w[jira site], limit: 5) }
+      .to(raise_error do |error|
+        expect(error.class.name).to eq('Integrations::OnyxMcp::Client::Error')
+        expect(error.message).to eq("Onyx search failed: Source type 'site' not found. Available: jira, web.")
+      end)
   end
 end

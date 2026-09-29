@@ -3,6 +3,8 @@ class Integrations::OnyxMcp::Client
 
   PROTOCOL_VERSION = '2025-06-18'.freeze
   TIMEOUT_SECONDS = 60
+  # A reachable Onyx accepts the connection in well under a second; waiting longer only delays the error
+  CONNECT_TIMEOUT_SECONDS = 10
 
   def initialize(hook:)
     @hook = hook
@@ -72,6 +74,10 @@ class Integrations::OnyxMcp::Client
                      })
     raise Error, tool_error_message(result) if tool_error?(result) && !unsupported_argument_error?(result, 'limit')
 
+    # Onyx reports some search failures, e.g. an unknown source type, inside a result that is not flagged as an error
+    search_error = result&.dig('structuredContent', 'error').presence
+    raise Error, "Onyx search failed: #{search_error}" if search_error
+
     result
   end
 
@@ -109,14 +115,25 @@ class Integrations::OnyxMcp::Client
   end
 
   def post_json(body)
-    connection.post(mcp_url) do |req|
-      req.headers['Authorization'] = "Bearer #{api_token}"
-      req.headers['Content-Type'] = 'application/json'
-      req.headers['Accept'] = 'application/json, text/event-stream'
-      req.headers['MCP-Protocol-Version'] = PROTOCOL_VERSION if session_id.present?
-      req.headers['Mcp-Session-Id'] = session_id if session_id.present?
-      req.body = body.to_json
+    with_network_errors do
+      connection.post(mcp_url) do |req|
+        req.headers['Authorization'] = "Bearer #{api_token}"
+        req.headers['Content-Type'] = 'application/json'
+        req.headers['Accept'] = 'application/json, text/event-stream'
+        req.headers['MCP-Protocol-Version'] = PROTOCOL_VERSION if session_id.present?
+        req.headers['Mcp-Session-Id'] = session_id if session_id.present?
+        req.body = body.to_json
+      end
     end
+  end
+
+  # Network failures are raised as Error, so the agent sees why the knowledge answer failed
+  def with_network_errors
+    yield
+  rescue Faraday::ConnectionFailed => e
+    raise Error, "Couldn't connect to Onyx at #{URI(mcp_url).host}: #{e.message}"
+  rescue Faraday::TimeoutError
+    raise Error, "Onyx didn't respond within #{TIMEOUT_SECONDS} seconds"
   end
 
   def parse_json_rpc_response(response)
@@ -166,7 +183,7 @@ class Integrations::OnyxMcp::Client
   def connection
     Faraday.new do |f|
       f.options.timeout = TIMEOUT_SECONDS
-      f.options.open_timeout = TIMEOUT_SECONDS
+      f.options.open_timeout = CONNECT_TIMEOUT_SECONDS
     end
   end
 end
