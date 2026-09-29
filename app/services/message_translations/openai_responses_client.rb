@@ -1,6 +1,6 @@
 # Posts to the OpenAI Responses API. Models differ in which tuning params they accept (e.g. reasoning
 # models reject temperature), so a rejected optional param is dropped and the request is retried without it.
-# An "Unsupported" rejection is remembered per model and reasoning effort, so later requests skip that param up front.
+# An "Unsupported" rejection is remembered per model, reasoning effort and service tier, so later requests skip that param up front.
 class MessageTranslations::OpenaiResponsesClient
   class Error < StandardError; end
 
@@ -10,7 +10,9 @@ class MessageTranslations::OpenaiResponsesClient
   WEB_REQUEST_TIMEOUT_SECONDS = 60
   # A reachable OpenAI accepts the connection in well under a second; waiting longer only delays the error
   CONNECT_TIMEOUT_SECONDS = 10
-  OPTIONAL_PARAMS = %w[temperature top_p reasoning max_output_tokens].freeze
+  OPTIONAL_PARAMS = %w[temperature top_p reasoning service_tier max_output_tokens].freeze
+  # The memory key includes the effort and the tier, so a rejected value of these is remembered whatever the error says
+  VALUE_KEYED_PARAMS = %w[reasoning service_tier].freeze
 
   # The reply text, or nil when there is none. Raises Error when OpenAI stopped early, so a cut-off reply is never used.
   # Raw API JSON has no top-level output_text (only the SDKs and some proxies add it), and reasoning items are skipped.
@@ -58,7 +60,7 @@ class MessageTranslations::OpenaiResponsesClient
       return [response, parsed_body] unless rejected_param
 
       Rails.logger.warn("[openai-responses] #{body[:model]} rejected '#{rejected_param}', retried without it: #{parsed_body.dig('error', 'message')}")
-      remember_unsupported_param(body, rejected_param) if rejected_param == 'reasoning' || unsupported_error?(parsed_body)
+      remember_unsupported_param(body, rejected_param) if VALUE_KEYED_PARAMS.include?(rejected_param) || unsupported_error?(parsed_body)
       request_body = request_body.except(rejected_param.to_sym)
     end
   end
@@ -89,7 +91,7 @@ class MessageTranslations::OpenaiResponsesClient
     param if OPTIONAL_PARAMS.include?(param) && request_body.key?(param.to_sym)
   end
 
-  # "Unsupported parameter/value" is a lasting model trait, and so is a rejected effort (the memory key includes it).
+  # "Unsupported parameter/value" is a lasting model trait, and so is a rejected effort or tier (the memory key includes them).
   # Other rejections (e.g. a value above the model limit) skip this request only.
   def unsupported_error?(parsed_body)
     parsed_body.dig('error', 'message').to_s.start_with?('Unsupported')
@@ -103,8 +105,10 @@ class MessageTranslations::OpenaiResponsesClient
     Redis::Alfred.set(unsupported_params_key(body), (unsupported_params(body) | [param]).join(','))
   end
 
+  # Requests without a service tier keep the key they had before tiers were supported
   def unsupported_params_key(body)
-    format(Redis::Alfred::OPENAI_UNSUPPORTED_PARAMS, model: body[:model], reasoning_effort: body.dig(:reasoning, :effort) || 'default')
+    key = format(Redis::Alfred::OPENAI_UNSUPPORTED_PARAMS, model: body[:model], reasoning_effort: body.dig(:reasoning, :effort) || 'default')
+    body[:service_tier] ? "#{key}::#{body[:service_tier]}" : key
   end
 
   def parse_response_body(body)

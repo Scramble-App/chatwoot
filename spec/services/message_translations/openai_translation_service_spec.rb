@@ -124,6 +124,41 @@ RSpec.describe MessageTranslations::OpenaiTranslationService do
     expect(accepted).to have_been_requested.twice
   end
 
+  context 'with a service tier' do
+    let(:tier_key) { "#{unsupported_params_key}::flex" }
+
+    before do
+      hook.settings['translation_service_tier'] = 'flex'
+      Redis::Alfred.delete(tier_key)
+    end
+
+    after { Redis::Alfred.delete(tier_key) }
+
+    it 'sends the configured tier' do
+      request = stub_request(:post, 'https://api.openai.com/v1/responses')
+                .with { |req| JSON.parse(req.body)['service_tier'] == 'flex' }
+                .to_return(translation_response)
+
+      described_class.new(hook: hook, message: message, target_locale: 'en').perform
+
+      expect(request).to have_been_requested
+    end
+
+    it 'remembers a tier the model rejects for that tier only' do
+      rejected, accepted = stub_responses(
+        without: 'service_tier',
+        rejected_with: rejection("Invalid value: 'flex'. Supported values are: 'auto' and 'default'.", 'service_tier')
+      )
+
+      translate_twice
+
+      expect(rejected).to have_been_requested.once
+      expect(accepted).to have_been_requested.twice
+      expect(Redis::Alfred.get(tier_key)).to eq('service_tier')
+      expect(Redis::Alfred.get(unsupported_params_key)).to be_nil
+    end
+  end
+
   it 'remembers a rejected reasoning effort even when OpenAI calls it invalid' do
     rejected, accepted = stub_responses(
       without: 'reasoning',
