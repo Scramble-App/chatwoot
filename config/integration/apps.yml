@@ -47,6 +47,8 @@ openai:
           'translation_instructions': { 'type': 'string' },
           'prepare_answer_instructions': { 'type': 'string' },
           'summary_instructions': { 'type': 'string' },
+          'dictation_model': { 'type': 'string' },
+          'dictation_terms': { 'type': 'string' },
         },
       'required': ['api_key'],
       'additionalProperties': false,
@@ -134,6 +136,20 @@ openai:
         'placeholder': 'Summarize customer support conversations for internal operator handoff. Group separate customer issues as Question 1, Question 2, and so on, using equivalent headings in the output language. For each question, include: customer problem, agent replies or internal actions, result or current status, and recommended next step. Treat "Agent reply to customer" as a public response sent to the customer. Treat "Internal private note" as internal support work only; do not describe it as a customer-facing reply. Do not say support actions were not recorded when the context contains an Agent reply to customer or an Internal private note. Do not invent facts, promises, names, dates, or decisions that are not present in the conversation context.',
         'help': 'Used by Summarize conversation; output language is enforced automatically from the operator language',
       },
+      {
+        'label': 'Dictation model',
+        'type': 'text',
+        'name': 'dictation_model',
+        'placeholder': 'gpt-transcribe',
+        'help': 'Speech-to-text model for dictated replies. Default is gpt-transcribe',
+      },
+      {
+        'label': 'Dictation terms',
+        'type': 'textarea',
+        'name': 'dictation_terms',
+        'placeholder': 'Scramble, KYC, IBAN, WhatsApp',
+        'help': 'Product names and terms that dictation should spell correctly. The operator language is used as the dictation language',
+      },
     ]
   visible_properties:
     [
@@ -148,6 +164,8 @@ openai:
       'translation_instructions',
       'prepare_answer_instructions',
       'summary_instructions',
+      'dictation_model',
+      'dictation_terms',
     ]
 onyx_mcp:
   id: onyx_mcp

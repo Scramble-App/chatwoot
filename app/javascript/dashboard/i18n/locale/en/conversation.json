@@ -231,6 +231,13 @@
       "COPILOT_THINKING": "Copilot is thinking",
       "COPILOT_COPY_SUCCESS": "Summary copied to clipboard",
       "COPILOT_GENERATION_ERROR": "Couldn't start this generation. Please try again.",
+      "DICTATION": {
+        "START": "Dictate a reply",
+        "STOP": "Stop and insert the text",
+        "TRANSCRIBING": "Transcribing the recording",
+        "MICROPHONE_ERROR": "Couldn't access the microphone. Allow microphone access in the browser and try again.",
+        "ERROR": "Couldn't transcribe the recording. Please try again."
+      },
       "EMAIL_HEAD": {
         "TO": "TO",
         "ADD_BCC": "Add bcc",
