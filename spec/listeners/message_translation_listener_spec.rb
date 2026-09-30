@@ -31,6 +31,31 @@ RSpec.describe MessageTranslationListener do
     listener.message_created(event)
   end
 
+  context 'with an agent reply' do
+    let(:message) do
+      create(:message, message_type: :outgoing, sender: agent, account: account, inbox: inbox, conversation: conversation, content: 'Hello')
+    end
+
+    it 'enqueues translation jobs, so other operators can read what was answered' do
+      expect(MessageTranslations::AutoTranslateJob).to receive(:perform_later).with(message.id, 'en')
+
+      listener.message_created(event)
+    end
+  end
+
+  context 'with a private note' do
+    let(:message) do
+      create(:message, message_type: :outgoing, sender: agent, account: account, inbox: inbox, conversation: conversation,
+                       content: 'Note', private: true)
+    end
+
+    it 'does not enqueue jobs' do
+      expect(MessageTranslations::AutoTranslateJob).not_to receive(:perform_later)
+
+      listener.message_created(event)
+    end
+  end
+
   it 'does not enqueue jobs when automatic translation is disabled' do
     account.hooks.find_by(app_id: 'openai').update!(
       settings: { 'api_key' => 'sk-test', 'translation_enabled' => true, 'auto_translate_incoming' => false }

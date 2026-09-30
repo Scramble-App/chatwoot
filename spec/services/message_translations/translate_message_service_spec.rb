@@ -52,11 +52,27 @@ RSpec.describe MessageTranslations::TranslateMessageService do
     )
   end
 
-  it 'does not translate outgoing messages' do
-    outgoing_message = create(:message, :bot_message, account: account, inbox: inbox, conversation: conversation, content: 'Hola')
+  it 'translates agent replies for operators too' do
+    reply = create(:message, message_type: :outgoing, sender: admin, account: account, inbox: inbox, conversation: conversation, content: 'Hola')
 
-    expect(described_class.new(message: outgoing_message, target_locale: 'en').perform).to be_nil
-    expect(MessageTranslation.where(message: outgoing_message)).to be_blank
+    translation = described_class.new(message: reply, target_locale: 'en').perform
+
+    expect(translation).to be_completed
+    expect(translation.content).to eq('Hello')
+  end
+
+  it 'does not translate private notes' do
+    note = create(:message, message_type: :outgoing, sender: admin, account: account, inbox: inbox, conversation: conversation, content: 'Hola',
+                            private: true)
+
+    expect(described_class.new(message: note, target_locale: 'en').perform).to be_nil
+    expect(MessageTranslation.where(message: note)).to be_blank
+  end
+
+  it 'does not translate activity messages' do
+    activity = create(:message, account: account, inbox: inbox, conversation: conversation, content: 'Assigned to John', message_type: :activity)
+
+    expect(described_class.new(message: activity, target_locale: 'en').perform).to be_nil
   end
 
   it 'marks the translation failed instead of saving a reply OpenAI cut off' do
