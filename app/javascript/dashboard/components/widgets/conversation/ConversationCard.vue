@@ -11,6 +11,10 @@ import UnreadBadge from 'dashboard/components-next/Conversation/ConversationCard
 import SLACardLabel from './components/SLACardLabel.vue';
 import VoiceCallStatus from './VoiceCallStatus.vue';
 import Checkbox from 'dashboard/components-next/checkbox/Checkbox.vue';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
+import { useI18n } from 'vue-i18n';
+import wootConstants from 'dashboard/constants/globals';
+import { snoozedStatusText } from 'dashboard/helper/snoozeHelpers';
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -32,6 +36,7 @@ const emit = defineEmits([
   'deSelectConversation',
 ]);
 
+const { t } = useI18n();
 const hovered = ref(false);
 
 const unreadCount = computed(() => props.chat.unread_count);
@@ -58,6 +63,13 @@ const showMetaSection = computed(() => {
 });
 
 const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
+
+// Snoozed conversations are listed with the open ones by default, so the card says when each comes back
+const snoozedText = computed(() =>
+  props.chat.status === wootConstants.STATUS_TYPE.SNOOZED
+    ? snoozedStatusText(t, props.chat.snoozed_until)
+    : ''
+);
 
 const showLabelsSection = computed(() => {
   return props.chat.labels?.length > 0 || hasSlaPolicyId.value;
@@ -202,6 +214,13 @@ watch(
         <span class="mx-0.5">
           {{ $t(`CHAT_LIST.NO_MESSAGES`) }}
         </span>
+      </p>
+      <p
+        v-if="snoozedText"
+        class="flex items-center gap-1 my-0 mx-2 text-xs leading-5 text-n-slate-11"
+      >
+        <Icon icon="i-lucide-alarm-clock" class="size-3 flex-shrink-0" />
+        <span class="truncate">{{ snoozedText }}</span>
       </p>
       <div
         class="absolute flex flex-col ltr:right-3 rtl:left-3"

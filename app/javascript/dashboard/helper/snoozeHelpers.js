@@ -65,6 +65,12 @@ export const snoozedReopenTime = snoozedUntil => {
   return format(date, 'd MMM, h.mmaaa');
 };
 
+// "Snoozed until 3 Oct, 10.00am", or "Snoozed until next reply" when there is no reopen time
+export const snoozedStatusText = (t, snoozedUntil) =>
+  snoozedUntil
+    ? `${t('CONVERSATION.HEADER.SNOOZED_UNTIL')} ${snoozedReopenTime(snoozedUntil)}`
+    : t('CONVERSATION.HEADER.SNOOZED_UNTIL_NEXT_REPLY');
+
 export const snoozedReopenTimeToTimestamp = snoozedUntil =>
   snoozedUntil ? getUnixTime(new Date(snoozedUntil)) : null;
 

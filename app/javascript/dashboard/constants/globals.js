@@ -11,6 +11,11 @@ export default {
     PENDING: 'pending',
     SNOOZED: 'snoozed',
     ALL: 'all',
+    // Default view: snoozed conversations are still open work that comes back on its own
+    OPEN_SNOOZED: 'open_snoozed',
+  },
+  STATUS_GROUPS: {
+    open_snoozed: ['open', 'snoozed'],
   },
   CONVERSATION_TYPE: {
     MENTION: 'mention',

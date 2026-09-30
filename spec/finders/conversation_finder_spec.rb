@@ -33,6 +33,29 @@ describe ConversationFinder do
       end
     end
 
+    context 'with status open_snoozed' do
+      let(:params) { { status: 'open_snoozed', assignee_type: 'me' } }
+
+      it 'returns open and snoozed conversations together' do
+        create(:conversation, account: account, inbox: inbox, assignee: user_1, status: 'snoozed')
+        create(:conversation, account: account, inbox: inbox, assignee: user_1, status: 'pending')
+
+        result = conversation_finder.perform
+
+        expect(result[:conversations].map(&:status)).to contain_exactly('open', 'open', 'snoozed')
+      end
+    end
+
+    context 'without status' do
+      let(:params) { { assignee_type: 'me' } }
+
+      it 'still returns only open conversations' do
+        create(:conversation, account: account, inbox: inbox, assignee: user_1, status: 'snoozed')
+
+        expect(conversation_finder.perform[:conversations].map(&:status)).to all(eq('open'))
+      end
+    end
+
     context 'with inbox' do
       let!(:restricted_conversation) { create(:conversation, account: account, inbox_id: restricted_inbox.id) }
 
