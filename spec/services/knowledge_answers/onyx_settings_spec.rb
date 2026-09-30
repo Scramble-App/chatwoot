@@ -11,11 +11,19 @@ RSpec.describe KnowledgeAnswers::OnyxSettings do
     end
   end
 
-  describe '.query_for' do
-    it 'inserts the conversation as typed, including backslash sequences' do
-      hook = hook_with('query_template' => 'Question: {{conversation_context}}')
+  describe '.search_question_instructions' do
+    it 'returns the configured instructions' do
+      hook = hook_with('query_template' => ' Use Group A and Group B. ')
 
-      expect(described_class.query_for(hook, 'Customer: path C:\\0\\& fails')).to eq('Question: Customer: path C:\\0\\& fails')
+      expect(described_class.search_question_instructions(hook)).to eq('Use Group A and Group B.')
+    end
+
+    it 'ignores a query template saved before OpenAI wrote the search question' do
+      expect(described_class.search_question_instructions(hook_with('query_template' => 'Question: {{conversation_context}}'))).to be_nil
+    end
+
+    it 'returns nothing when no instructions are configured' do
+      expect(described_class.search_question_instructions(hook_with({}))).to be_nil
     end
   end
 end

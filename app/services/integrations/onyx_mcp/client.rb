@@ -5,6 +5,8 @@ class Integrations::OnyxMcp::Client
   TIMEOUT_SECONDS = 120
   # A reachable Onyx accepts the connection in well under a second; waiting longer only delays the error
   CONNECT_TIMEOUT_SECONDS = 10
+  # Onyx rejects longer queries (its SearchRequest allows at most 2048 characters)
+  QUERY_CHARACTER_LIMIT = 2048
 
   def initialize(hook:)
     @hook = hook
@@ -19,7 +21,7 @@ class Integrations::OnyxMcp::Client
     validate_settings!
     initialize_session
 
-    arguments = { query: query }
+    arguments = { query: query.to_s.first(QUERY_CHARACTER_LIMIT) }
     arguments[:source_types] = source_types if source_types.present?
     call_search_indexed_documents(arguments)
   end

@@ -4,6 +4,7 @@ class AiGenerations::KnowledgeAnswerJob < AiGenerations::BaseJob
   EXPECTED_ERRORS = [
     'KnowledgeAnswers::AnswerService::Error',
     'KnowledgeAnswers::OpenaiAnswerService::Error',
+    'KnowledgeAnswers::OpenaiSearchQuestionService::Error',
     'Integrations::OnyxMcp::Client::Error',
     'MessageTranslations::OpenaiResponsesClient::Error'
   ].freeze

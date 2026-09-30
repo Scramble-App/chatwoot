@@ -7,9 +7,13 @@ RSpec.describe KnowledgeAnswers::AnswerService do
   let(:user) { create(:user, account: account, role: :agent) }
   let(:onyx_client) { instance_double(Integrations::OnyxMcp::Client) }
   let(:openai_service) { instance_double(KnowledgeAnswers::OpenaiAnswerService, perform: 'Knowledge answer draft') }
+  let(:search_question_service) do
+    instance_double(KnowledgeAnswers::OpenaiSearchQuestionService, perform: 'Where can the customer find the invoice?')
+  end
 
   before do
     allow(Integrations::Openai::KeyValidator).to receive(:valid?).and_return(true)
+    allow(KnowledgeAnswers::OpenaiSearchQuestionService).to receive(:new).and_return(search_question_service)
     account.account_users.find_by(user: user).update!(translation_locale: 'ru')
   end
 
@@ -26,8 +30,7 @@ RSpec.describe KnowledgeAnswers::AnswerService do
         'mcp_url' => 'https://cloud.onyx.app/mcp',
         'api_token' => 'onyx-token',
         'source_types' => 'Confluence, jira',
-        'result_limit' => 3,
-        'query_template' => 'Support question: {{conversation_context}}'
+        'result_limit' => 3
       }
     )
 
@@ -47,8 +50,14 @@ RSpec.describe KnowledgeAnswers::AnswerService do
     result = described_class.new(conversation: conversation, user: user).perform
 
     expect(result).to eq('Knowledge answer draft')
+    # Onyx gets the question OpenAI wrote from the conversation, not the conversation itself
+    expect(KnowledgeAnswers::OpenaiSearchQuestionService).to have_received(:new).with(
+      openai_hook: openai_hook,
+      onyx_hook: onyx_hook,
+      conversation_context: "Customer: How can I find my invoice?\nAgent reply to customer: Please check your billing page."
+    )
     expect(onyx_client).to have_received(:search_indexed_documents).with(
-      query: include('Customer: How can I find my invoice?', 'Agent reply to customer: Please check your billing page.'),
+      query: 'Where can the customer find the invoice?',
       source_types: %w[confluence jira]
     )
     expect(KnowledgeAnswers::OpenaiAnswerService).to have_received(:new).with(

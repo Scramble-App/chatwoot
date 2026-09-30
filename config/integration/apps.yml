@@ -234,11 +234,11 @@ onyx_mcp:
         'help': 'Maximum Onyx results passed to OpenAI (1-20)',
       },
       {
-        'label': 'Query template',
+        'label': 'Search question instructions',
         'type': 'textarea',
         'name': 'query_template',
-        'placeholder': 'Please help answer the customer support question. Conversation:\n{{conversation_context}}',
-        'help': 'Use {{conversation_context}} where the public conversation should be inserted',
+        'placeholder': 'Use Scramble product names, for example Group A and Group B',
+        'help': 'OpenAI turns the conversation into one question in English that is searched in Onyx. Optional extra instructions for that question, for example another language or product names to use',
       },
       {
         'label': 'Guardrails',

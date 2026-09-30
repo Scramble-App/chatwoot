@@ -1,9 +1,4 @@
 class KnowledgeAnswers::OnyxSettings
-  DEFAULT_QUERY_TEMPLATE = <<~TEXT.squish
-    Please help answer the customer support question using the indexed knowledge base.
-    Use this public conversation context:
-    {{conversation_context}}
-  TEXT
   DEFAULT_RESULT_LIMIT = 5
   DEFAULT_ANSWER_GUARDRAILS = <<~TEXT.squish.freeze
     Use only the provided knowledge base excerpts. Do not invent facts, policy details, product behavior, links, prices, dates, or promises. If the knowledge base does not contain enough information, say what is missing and suggest that the agent verify it internally.
@@ -29,12 +24,11 @@ class KnowledgeAnswers::OnyxSettings
           .reject(&:blank?)
     end
 
-    def query_for(hook, conversation_context)
-      template = hook&.settings&.dig('query_template').presence || DEFAULT_QUERY_TEMPLATE
-      # A block keeps backslash sequences such as \0 in customer text from being read as match references
-      return template.gsub('{{conversation_context}}') { conversation_context } if template.include?('{{conversation_context}}')
-
-      [template, conversation_context].join("\n\n")
+    # Stored under query_template, which held a template for the whole search query before OpenAI wrote the question.
+    # A value from that time still contains the placeholder and is not an instruction, so it is ignored.
+    def search_question_instructions(hook)
+      value = hook&.settings&.dig('query_template').to_s.strip
+      value if value.present? && value.exclude?('{{conversation_context}}')
     end
 
     def answer_guardrails(hook)
