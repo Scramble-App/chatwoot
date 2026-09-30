@@ -79,7 +79,7 @@ openai:
         'validation': '',
       },
       {
-        'label': 'Auto translate incoming messages',
+        'label': 'Auto translate customer messages and agent replies',
         'type': 'checkbox',
         'name': 'auto_translate_incoming',
         'validation': '',

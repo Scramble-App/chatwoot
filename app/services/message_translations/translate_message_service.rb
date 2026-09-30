@@ -1,6 +1,14 @@
 class MessageTranslations::TranslateMessageService
   pattr_initialize [:message!, :target_locale!]
 
+  # Customer messages and agent replies are translated for operators; private notes stay as written.
+  # Translations are only returned to operators, never to the customer.
+  def self.translatable_message?(message)
+    (message.incoming? || message.outgoing?) &&
+      !message.private? &&
+      MessageTranslations::OpenaiTranslationService.source_text_for(message).present?
+  end
+
   def perform
     return unless translatable?
 
@@ -46,9 +54,6 @@ class MessageTranslations::TranslateMessageService
   end
 
   def translatable?
-    target_locale.present? &&
-      message.incoming? &&
-      !message.private? &&
-      MessageTranslations::OpenaiTranslationService.source_text_for(message).present?
+    target_locale.present? && self.class.translatable_message?(message)
   end
 end

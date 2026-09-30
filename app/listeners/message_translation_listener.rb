@@ -15,9 +15,7 @@ class MessageTranslationListener < BaseListener
   private
 
   def eligible_message?(message)
-    message.incoming? &&
-      !message.private? &&
-      MessageTranslations::OpenaiTranslationService.source_text_for(message).present?
+    MessageTranslations::TranslateMessageService.translatable_message?(message)
   end
 
   def target_locales_for(message, account)

@@ -40,10 +40,12 @@ const isIncoming = computed(() => !isOutgoing.value);
 const { hasTranslations, translationContent } =
   useTranslations(contentAttributes);
 
+// Customer messages and agent replies; the backend never translates private notes
 const hasOperatorTranslation = computed(() => {
   return (
-    messageType.value === MESSAGE_TYPES.INCOMING &&
-    operatorTranslation.value?.content
+    [MESSAGE_TYPES.INCOMING, MESSAGE_TYPES.OUTGOING].includes(
+      messageType.value
+    ) && operatorTranslation.value?.content
   );
 });
 
