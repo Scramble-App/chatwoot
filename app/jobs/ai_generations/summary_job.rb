@@ -3,7 +3,8 @@ class AiGenerations::SummaryJob < AiGenerations::BaseJob
   EVENT = Events::Types::CONVERSATION_SUMMARY_UPDATED
   EXPECTED_ERRORS = [
     'ConversationSummaries::SummaryService::Error',
-    'ConversationSummaries::OpenaiSummaryService::Error'
+    'ConversationSummaries::OpenaiSummaryService::Error',
+    'MessageTranslations::OpenaiResponsesClient::Error'
   ].freeze
 
   private

@@ -59,6 +59,25 @@ RSpec.describe MessageTranslations::TranslateMessageService do
     expect(MessageTranslation.where(message: outgoing_message)).to be_blank
   end
 
+  it 'marks the translation failed instead of saving a reply OpenAI cut off' do
+    allow(MessageTranslations::OpenaiTranslationService).to receive(:new).and_call_original
+    body = {
+      status: 'incomplete',
+      incomplete_details: { reason: 'max_output_tokens' },
+      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hel' }] }]
+    }
+    stub_request(:post, 'https://api.openai.com/v1/responses')
+      .to_return(status: 200, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
+
+    expect { described_class.new(message: message, target_locale: 'en').perform }
+      .to raise_error(MessageTranslations::OpenaiResponsesClient::Error)
+
+    translation = MessageTranslation.find_by!(message: message, target_locale: 'en')
+    expect(translation).to be_failed
+    expect(translation.content).to be_nil
+    expect(translation.error_message).to start_with('OpenAI ran out of output tokens')
+  end
+
   it 'retries a failed existing translation instead of creating a duplicate' do
     translation = MessageTranslation.create!(
       account: account,

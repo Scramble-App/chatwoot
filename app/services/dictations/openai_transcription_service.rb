@@ -63,8 +63,8 @@ class Dictations::OpenaiTranscriptionService
   def connection
     Faraday.new do |faraday|
       faraday.request :multipart
-      faraday.options.timeout = MessageTranslations::OpenaiResponsesClient::TIMEOUT_SECONDS
-      faraday.options.open_timeout = MessageTranslations::OpenaiResponsesClient::TIMEOUT_SECONDS
+      faraday.options.timeout = MessageTranslations::OpenaiResponsesClient::WEB_REQUEST_TIMEOUT_SECONDS
+      faraday.options.open_timeout = MessageTranslations::OpenaiResponsesClient::CONNECT_TIMEOUT_SECONDS
     end
   end
 end

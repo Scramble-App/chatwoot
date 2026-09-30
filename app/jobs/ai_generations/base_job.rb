@@ -21,6 +21,8 @@ class AiGenerations::BaseJob < ApplicationJob
     broadcast(generation)
   rescue StandardError => e
     Rails.logger.error("[ai-generation] #{self.class.name} #{e.class}: #{e.message}")
+    # Unexpected errors point to a bug or an unhandled upstream change, so they are reported, not only logged
+    ChatwootExceptionTracker.new(e, account: generation.account).capture_exception unless expected_error?(e)
     return if dismissed?(generation)
 
     generation.fail!(error_message_for(e))
@@ -41,8 +43,12 @@ class AiGenerations::BaseJob < ApplicationJob
     AiGenerations::BroadcastService.new(generation: generation, event_name: self.class::EVENT).perform
   end
 
+  def expected_error?(error)
+    self.class::EXPECTED_ERRORS.include?(error.class.name)
+  end
+
   # Expected service errors are shown to the operator as they are; anything else hides behind a generic message.
   def error_message_for(error)
-    self.class::EXPECTED_ERRORS.include?(error.class.name) ? error.message : I18n.t('ai_generations.generic_error')
+    expected_error?(error) ? error.message : I18n.t('ai_generations.generic_error')
   end
 end

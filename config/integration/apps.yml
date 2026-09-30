@@ -100,7 +100,7 @@ openai:
         'label': 'Translation max output tokens',
         'type': 'number',
         'name': 'translation_max_output_tokens',
-        'help': 'Default is 1200',
+        'help': 'Default is 1200. Reasoning tokens count toward this limit, so raise it for a high reasoning effort',
       },
       {
         'label': 'Translation temperature',
@@ -213,15 +213,15 @@ onyx_mcp:
         'label': 'Source types',
         'type': 'text',
         'name': 'source_types',
-        'placeholder': 'confluence,google_drive,jira',
-        'help': 'Optional comma-separated Onyx source type filters',
+        'placeholder': 'confluence,jira,web',
+        'help': 'Optional comma-separated Onyx source types, e.g. confluence, jira, web. Leave blank to search all sources',
       },
       {
         'label': 'Result limit',
         'type': 'number',
         'name': 'result_limit',
         'placeholder': '5',
-        'help': 'Maximum indexed document chunks to retrieve from Onyx',
+        'help': 'Maximum Onyx results passed to OpenAI (1-20)',
       },
       {
         'label': 'Query template',

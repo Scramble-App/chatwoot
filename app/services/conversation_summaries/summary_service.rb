@@ -22,16 +22,17 @@ class ConversationSummaries::SummaryService
 
   private
 
+  # Keeps the newest messages, so the latest customer question is never dropped; the text stays oldest to newest
   def conversation_context_text
     selected = []
     character_count = 0
 
-    messages_for_context.each do |message|
-      formatted = format_message(message)
+    messages_for_context.reverse_each do |message|
+      formatted = format_message(message)&.truncate(CONVERSATION_CONTEXT_CHARACTER_LIMIT)
       next if formatted.blank?
       break if character_count + formatted.length > CONVERSATION_CONTEXT_CHARACTER_LIMIT
 
-      selected << formatted
+      selected.unshift(formatted)
       character_count += formatted.length
     end
 

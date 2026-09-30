@@ -72,6 +72,13 @@ services:
       - redis
     environment:
       <<: *app_environment
+    # Knowledge answer jobs call Onyx, which accepts connections only on the private network;
+    # its public DNS name resolves to an address that drops the traffic
+    extra_hosts:
+      - 'assistant-ai.scrambleup.com:10.114.0.13'
+    # Sidekiq waits up to 25 seconds (:timeout in config/sidekiq.yml) for running jobs, then requeues the rest.
+    # Docker's default 10 seconds kills it first, so running AI generations were lost on every deploy.
+    stop_grace_period: 40s
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
     restart: always
 

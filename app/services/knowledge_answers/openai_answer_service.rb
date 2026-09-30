@@ -13,8 +13,8 @@ class KnowledgeAnswers::OpenaiAnswerService
   end
 
   def perform
-    parsed_response = make_request
-    extract_output_text(parsed_response).presence || raise(Error, 'OpenAI returned an empty knowledge answer')
+    text = MessageTranslations::OpenaiResponsesClient.output_text(make_request)
+    text.presence || raise(Error, 'OpenAI returned an empty knowledge answer')
   end
 
   private
@@ -61,17 +61,5 @@ class KnowledgeAnswers::OpenaiAnswerService
       Knowledge base excerpts from Onyx:
       #{knowledge_context}
     TEXT
-  end
-
-  def extract_output_text(parsed_response)
-    return parsed_response['output_text'] if parsed_response['output_text'].present?
-
-    parsed_response['output']&.each do |item|
-      item['content']&.each do |content_item|
-        return content_item['text'] if content_item['text'].present?
-      end
-    end
-
-    nil
   end
 end

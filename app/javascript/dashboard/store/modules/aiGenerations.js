@@ -68,7 +68,11 @@ export const actions = {
       conversationId,
       path: KIND_PATHS[kind],
     });
-    if (status === 204 || !data) return;
+    // Gone on the server, e.g. dismissed in another tab, so a local in-progress copy must not keep the reply box locked
+    if (status === 204 || !data) {
+      commit(types.REMOVE_AI_GENERATION, { kind, conversationId });
+      return;
+    }
 
     commit(types.SET_AI_GENERATION, { kind, conversationId, record: data });
   },

@@ -7,7 +7,6 @@ class KnowledgeAnswers::AnswerService
 
   pattr_initialize [:conversation!, :user!]
 
-  # rubocop:disable Metrics/MethodLength
   def perform
     openai_hook = MessageTranslations::OpenaiSettings.hook_for(conversation.account)
     raise Error, 'OpenAI integration is not configured' if openai_hook.blank?
@@ -18,37 +17,44 @@ class KnowledgeAnswers::AnswerService
     context = conversation_context_text
     raise Error, 'No public conversation messages available for knowledge answer' if context.blank?
 
-    onyx_result = Integrations::OnyxMcp::Client.new(hook: onyx_hook).search_indexed_documents(
-      query: KnowledgeAnswers::OnyxSettings.query_for(onyx_hook, context),
-      source_types: KnowledgeAnswers::OnyxSettings.source_types(onyx_hook),
-      limit: KnowledgeAnswers::OnyxSettings.result_limit(onyx_hook)
-    )
-
-    knowledge_context = knowledge_context_text(onyx_result, KnowledgeAnswers::OnyxSettings.result_limit(onyx_hook))
-    raise Error, 'No knowledge base results found in Onyx' if knowledge_context.blank?
-
     KnowledgeAnswers::OpenaiAnswerService.new(
       openai_hook: openai_hook,
       onyx_hook: onyx_hook,
       conversation_context: context,
-      knowledge_context: knowledge_context,
+      knowledge_context: knowledge_context_for(onyx_hook, context),
       output_language: output_language_label
     ).perform
   end
-  # rubocop:enable Metrics/MethodLength
 
   private
 
+  def knowledge_context_for(onyx_hook, context)
+    onyx_result = Integrations::OnyxMcp::Client.new(hook: onyx_hook).search_indexed_documents(
+      query: KnowledgeAnswers::OnyxSettings.query_for(onyx_hook, context),
+      source_types: KnowledgeAnswers::OnyxSettings.source_types(onyx_hook)
+    )
+    documents = documents_from(onyx_result).first(KnowledgeAnswers::OnyxSettings.result_limit(onyx_hook))
+    raise Error, 'No knowledge base results found in Onyx' if documents.blank?
+
+    knowledge_context = knowledge_context_text(documents)
+    return knowledge_context if knowledge_context.present?
+
+    # Onyx found documents, but none in a shape this code reads, e.g. after the text field was renamed
+    fields = documents.first.try(:keys)&.join(', ')
+    raise Error, "Onyx returned #{documents.size} #{'result'.pluralize(documents.size)} without readable text (fields: #{fields})"
+  end
+
+  # Keeps the newest messages, so the customer's current question is never dropped; the text stays oldest to newest
   def conversation_context_text
     selected = []
     character_count = 0
 
-    public_messages_for_context.each do |message|
-      formatted = format_message(message)
+    public_messages_for_context.reverse_each do |message|
+      formatted = format_message(message)&.truncate(CONVERSATION_CONTEXT_CHARACTER_LIMIT)
       next if formatted.blank?
       break if character_count + formatted.length > CONVERSATION_CONTEXT_CHARACTER_LIMIT
 
-      selected << formatted
+      selected.unshift(formatted)
       character_count += formatted.length
     end
 
@@ -75,14 +81,14 @@ class KnowledgeAnswers::AnswerService
     message.incoming? ? 'Customer' : 'Agent reply to customer'
   end
 
-  def knowledge_context_text(onyx_result, result_limit)
+  # Results come most relevant first; one that does not fit is skipped, so an oversized document cannot empty the context
+  def knowledge_context_text(documents)
     selected = []
     character_count = 0
 
-    documents_from(onyx_result).first(result_limit).each_with_index do |document, index|
-      formatted = format_document(document, index + 1)
-      next if formatted.blank?
-      break if character_count + formatted.length > KNOWLEDGE_CONTEXT_CHARACTER_LIMIT
+    documents.each_with_index do |document, index|
+      formatted = format_document(document, index + 1)&.truncate(KNOWLEDGE_CONTEXT_CHARACTER_LIMIT)
+      next if formatted.blank? || character_count + formatted.length > KNOWLEDGE_CONTEXT_CHARACTER_LIMIT
 
       selected << formatted
       character_count += formatted.length
@@ -110,14 +116,18 @@ class KnowledgeAnswers::AnswerService
       next [] unless item['type'] == 'text' && item['text'].present?
 
       parsed = JSON.parse(item['text'])
-      parsed['documents'].presence || parsed['results'] || []
+      next [] unless parsed.is_a?(Hash)
+
+      Array(parsed['documents'].presence || parsed['results'])
     rescue JSON::ParserError
       []
     end
   end
 
   def format_document(document, index)
-    doc = document.to_h.with_indifferent_access
+    return unless document.is_a?(Hash)
+
+    doc = document.with_indifferent_access
     content = doc[:content].presence || doc[:snippet].presence || doc[:text].presence
     return if content.blank?
 

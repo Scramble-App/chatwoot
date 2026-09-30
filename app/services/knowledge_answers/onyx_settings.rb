@@ -25,13 +25,14 @@ class KnowledgeAnswers::OnyxSettings
     def source_types(hook)
       hook&.settings&.dig('source_types').to_s
           .split(',')
-          .map(&:strip)
+          .map { |source_type| source_type.strip.downcase }
           .reject(&:blank?)
     end
 
     def query_for(hook, conversation_context)
       template = hook&.settings&.dig('query_template').presence || DEFAULT_QUERY_TEMPLATE
-      return template.gsub('{{conversation_context}}', conversation_context) if template.include?('{{conversation_context}}')
+      # A block keeps backslash sequences such as \0 in customer text from being read as match references
+      return template.gsub('{{conversation_context}}') { conversation_context } if template.include?('{{conversation_context}}')
 
       [template, conversation_context].join("\n\n")
     end

@@ -53,11 +53,41 @@ RSpec.describe AiGenerations::BaseJob do
 
       AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
     end
+
+    it 'does not report it to the exception tracker' do
+      allow(ChatwootExceptionTracker).to receive(:new)
+
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(ChatwootExceptionTracker).not_to have_received(:new)
+    end
+  end
+
+  describe 'an OpenAI request failure' do
+    it 'shows the reason to the operator in every AI generation' do
+      message = "OpenAI didn't respond within 120 seconds. Try a lower 'Translation reasoning effort'"
+      {
+        AiGenerations::KnowledgeAnswerJob => [KnowledgeAnswers::AnswerService, generation],
+        AiGenerations::SummaryJob => [ConversationSummaries::SummaryService, create(:ai_generation_summary)],
+        AiGenerations::PreparedReplyJob => [ReplyPreparations::PrepareReplyService, create(:ai_generation_prepared_reply)]
+      }.each do |job, (service, record)|
+        service_double = instance_double(service)
+        allow(service).to receive(:new).and_return(service_double)
+        allow(service_double).to receive(:perform).and_raise(MessageTranslations::OpenaiResponsesClient::Error, message)
+
+        job.perform_now(record.id)
+
+        expect(record.reload.error_message).to eq(message)
+      end
+    end
   end
 
   describe 'an unexpected failure' do
+    let(:tracker) { instance_double(ChatwootExceptionTracker, capture_exception: true) }
+
     before do
       allow(answer_service).to receive(:perform).and_raise(StandardError, 'PG::ConnectionBad: could not connect')
+      allow(ChatwootExceptionTracker).to receive(:new).and_return(tracker)
     end
 
     it 'hides the internal detail behind a generic message' do
@@ -65,6 +95,13 @@ RSpec.describe AiGenerations::BaseJob do
 
       expect(generation.reload).to be_failed
       expect(generation.error_message).to eq(I18n.t('ai_generations.generic_error'))
+    end
+
+    it 'reports the error to the exception tracker' do
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(ChatwootExceptionTracker).to have_received(:new).with(an_instance_of(StandardError), account: generation.account)
+      expect(tracker).to have_received(:capture_exception)
     end
   end
 

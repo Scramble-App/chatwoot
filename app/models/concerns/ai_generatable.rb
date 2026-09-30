@@ -1,7 +1,8 @@
 module AiGeneratable
   extend ActiveSupport::Concern
 
-  STALE_TIMEOUT = 5.minutes
+  # Each Onyx and OpenAI request may take up to 2 minutes, so a slow but healthy job can run past 5 minutes
+  STALE_TIMEOUT = 10.minutes
   CONTENT_LIMIT = 150_000
   ERROR_MESSAGE_LIMIT = 10_000
 
@@ -30,8 +31,9 @@ module AiGeneratable
     update!(status: :running)
   end
 
+  # Content over the limit would fail validation and then make fail! raise too, so Sidekiq would rerun the paid generation
   def complete!(generated_content)
-    update!(status: :completed, content: generated_content, error_message: nil)
+    update!(status: :completed, content: generated_content.truncate(CONTENT_LIMIT), error_message: nil)
   end
 
   def fail!(message)
