@@ -15,6 +15,28 @@ RSpec.describe MessageTranslations::OpenaiSettings do
     end
   end
 
+  describe '.search_question_model' do
+    it 'uses the translation model when no own model is configured' do
+      expect(described_class.search_question_model(hook_with('translation_model' => 'gpt-6-sol'))).to eq('gpt-6-sol')
+    end
+
+    it 'uses its own model when configured' do
+      hook = hook_with('translation_model' => 'gpt-6-sol', 'search_question_model' => ' gpt-6-luna ')
+
+      expect(described_class.search_question_model(hook)).to eq('gpt-6-luna')
+    end
+  end
+
+  describe '.search_question_reasoning_effort' do
+    it 'is low when not configured, whatever the translation effort' do
+      expect(described_class.search_question_reasoning_effort(hook_with('translation_reasoning_effort' => 'max'))).to eq('low')
+    end
+
+    it 'uses the configured effort' do
+      expect(described_class.search_question_reasoning_effort(hook_with('search_question_reasoning_effort' => ' High '))).to eq('high')
+    end
+  end
+
   describe '.service_tier' do
     it 'passes the configured tier through in lowercase' do
       expect(described_class.service_tier(hook_with('translation_service_tier' => ' Priority '))).to eq('priority')

@@ -3,9 +3,6 @@
 class KnowledgeAnswers::OpenaiSearchQuestionService
   class Error < StandardError; end
 
-  # The question needs little reasoning, and a high configured effort would add up to a minute before the search starts
-  REASONING_EFFORT = 'low'.freeze
-  FASTER_EFFORTS = %w[none minimal low].freeze
   INSTRUCTIONS = [
     'Analyze the support conversation with the customer and write the question for the model that answers from the company knowledge base.',
     "Focus on the customer's latest questions that are still unresolved.",
@@ -42,7 +39,7 @@ class KnowledgeAnswers::OpenaiSearchQuestionService
 
   def request_body
     body = {
-      model: MessageTranslations::OpenaiSettings.model(openai_hook),
+      model: MessageTranslations::OpenaiSettings.search_question_model(openai_hook),
       instructions: [INSTRUCTIONS, KnowledgeAnswers::OnyxSettings.search_question_instructions(onyx_hook)].compact.join(' '),
       input: "Public conversation context, oldest to newest:\n#{conversation_context}",
       max_output_tokens: MessageTranslations::OpenaiSettings.max_output_tokens(openai_hook),
@@ -50,11 +47,10 @@ class KnowledgeAnswers::OpenaiSearchQuestionService
     }
 
     MessageTranslations::OpenaiSettings.apply_model_options!(body, openai_hook)
-    body.merge(reasoning: { effort: reasoning_effort })
-  end
+    # The question has its own effort setting; default leaves the effort to the model, as it does for the other features
+    effort = MessageTranslations::OpenaiSettings.search_question_reasoning_effort(openai_hook)
+    return body.except(:reasoning) if effort == MessageTranslations::OpenaiSettings::DEFAULT_REASONING_EFFORT
 
-  def reasoning_effort
-    effort = MessageTranslations::OpenaiSettings.reasoning_effort(openai_hook)
-    FASTER_EFFORTS.include?(effort) ? effort : REASONING_EFFORT
+    body.merge(reasoning: { effort: effort })
   end
 end

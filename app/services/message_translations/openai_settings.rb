@@ -3,6 +3,8 @@ class MessageTranslations::OpenaiSettings
   DEFAULT_MAX_OUTPUT_TOKENS = 1200
   # Leaves reasoning to the model's own default instead of sending an effort
   DEFAULT_REASONING_EFFORT = 'default'.freeze
+  # The knowledge answer search question needs little reasoning, and a high effort would delay the Onyx search by up to a minute
+  DEFAULT_SEARCH_QUESTION_REASONING_EFFORT = 'low'.freeze
   DEFAULT_TEMPERATURE = 0.2
   DEFAULT_REPLY_TONE_INSTRUCTIONS = 'Professional, clear, concise, friendly support tone.'.freeze
   DEFAULT_TRANSLATION_INSTRUCTIONS = [
@@ -50,6 +52,15 @@ class MessageTranslations::OpenaiSettings
     def reasoning_effort(hook)
       value = hook&.settings&.dig('translation_reasoning_effort').to_s.strip.downcase
       value.match?(/\A[a-z_]+\z/) ? value : DEFAULT_REASONING_EFFORT
+    end
+
+    def search_question_model(hook)
+      hook&.settings&.dig('search_question_model').to_s.strip.presence || model(hook)
+    end
+
+    def search_question_reasoning_effort(hook)
+      value = hook&.settings&.dig('search_question_reasoning_effort').to_s.strip.downcase
+      value.match?(/\A[a-z_]+\z/) ? value : DEFAULT_SEARCH_QUESTION_REASONING_EFFORT
     end
 
     # Empty leaves the tier to the OpenAI project. Any tier name is passed through, so new OpenAI tiers work without a code change;

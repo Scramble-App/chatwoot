@@ -1,10 +1,10 @@
 require 'rails_helper'
 
 RSpec.describe KnowledgeAnswers::OpenaiSearchQuestionService do
-  let(:effort) { 'high' }
+  let(:question_settings) { {} }
   let(:openai_hook) do
     build(:integrations_hook, :openai,
-          settings: { 'api_key' => 'sk-test', 'translation_model' => 'gpt-5.1', 'translation_reasoning_effort' => effort })
+          settings: { 'api_key' => 'sk-test', 'translation_model' => 'gpt-5.1', 'translation_reasoning_effort' => 'high' }.merge(question_settings))
   end
   let(:onyx_settings) { {} }
   let(:onyx_hook) do
@@ -34,8 +34,8 @@ RSpec.describe KnowledgeAnswers::OpenaiSearchQuestionService do
 
   # Rejected params are remembered in Redis, which is not reset between examples
   before do
-    %w[low none].each do |value|
-      Redis::Alfred.delete(format(Redis::Alfred::OPENAI_UNSUPPORTED_PARAMS, model: 'gpt-5.1', reasoning_effort: value))
+    [%w[gpt-5.1 low], %w[gpt-5.1 default], %w[gpt-6-luna medium]].each do |model, effort|
+      Redis::Alfred.delete(format(Redis::Alfred::OPENAI_UNSUPPORTED_PARAMS, model: model, reasoning_effort: effort))
     end
   end
 
@@ -54,23 +54,35 @@ RSpec.describe KnowledgeAnswers::OpenaiSearchQuestionService do
     expect(body['store']).to be(false)
   end
 
-  it 'uses a low reasoning effort, so a high configured effort does not delay the search' do
+  it 'uses the translation model with a low effort by default, so a high translation effort does not delay the search' do
     reply_with('When does a bank transfer arrive?')
 
     search_question
 
-    expect(sent_bodies.first['reasoning']).to eq('effort' => 'low')
+    expect(sent_bodies.first).to include('model' => 'gpt-5.1', 'reasoning' => { 'effort' => 'low' })
   end
 
-  context 'with a configured effort that is already faster' do
-    let(:effort) { 'none' }
+  context 'with its own model and effort' do
+    let(:question_settings) { { 'search_question_model' => ' gpt-6-luna ', 'search_question_reasoning_effort' => 'Medium' } }
 
-    it 'keeps it' do
+    it 'uses them' do
       reply_with('When does a bank transfer arrive?')
 
       search_question
 
-      expect(sent_bodies.first['reasoning']).to eq('effort' => 'none')
+      expect(sent_bodies.first).to include('model' => 'gpt-6-luna', 'reasoning' => { 'effort' => 'medium' })
+    end
+  end
+
+  context 'with the default effort' do
+    let(:question_settings) { { 'search_question_reasoning_effort' => 'default' } }
+
+    it 'leaves the effort to the model' do
+      reply_with('When does a bank transfer arrive?')
+
+      search_question
+
+      expect(sent_bodies.first).not_to have_key('reasoning')
     end
   end
 
