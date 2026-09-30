@@ -81,6 +81,7 @@ export default {
       });
       if (this.openaiModels.length) {
         lists.translation_model = this.openaiModels;
+        lists.search_question_model = this.openaiModels;
       }
       return lists;
     },

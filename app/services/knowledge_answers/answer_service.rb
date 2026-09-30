@@ -21,16 +21,19 @@ class KnowledgeAnswers::AnswerService
       openai_hook: openai_hook,
       onyx_hook: onyx_hook,
       conversation_context: context,
-      knowledge_context: knowledge_context_for(onyx_hook, context),
+      knowledge_context: knowledge_context_for(openai_hook, onyx_hook, context),
       output_language: output_language_label
     ).perform
   end
 
   private
 
-  def knowledge_context_for(onyx_hook, context)
+  def knowledge_context_for(openai_hook, onyx_hook, context)
+    question = KnowledgeAnswers::OpenaiSearchQuestionService.new(
+      openai_hook: openai_hook, onyx_hook: onyx_hook, conversation_context: context
+    ).perform
     onyx_result = Integrations::OnyxMcp::Client.new(hook: onyx_hook).search_indexed_documents(
-      query: KnowledgeAnswers::OnyxSettings.query_for(onyx_hook, context),
+      query: question,
       source_types: KnowledgeAnswers::OnyxSettings.source_types(onyx_hook)
     )
     documents = documents_from(onyx_result).first(KnowledgeAnswers::OnyxSettings.result_limit(onyx_hook))

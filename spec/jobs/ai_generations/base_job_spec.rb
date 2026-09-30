@@ -54,6 +54,15 @@ RSpec.describe AiGenerations::BaseJob do
       AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
     end
 
+    it 'shows why OpenAI could not write the knowledge base search question' do
+      allow(answer_service).to receive(:perform)
+        .and_raise(KnowledgeAnswers::OpenaiSearchQuestionService::Error, 'OpenAI returned an empty knowledge base search question')
+
+      AiGenerations::KnowledgeAnswerJob.perform_now(generation.id)
+
+      expect(generation.reload.error_message).to eq('OpenAI returned an empty knowledge base search question')
+    end
+
     it 'does not report it to the exception tracker' do
       allow(ChatwootExceptionTracker).to receive(:new)
 

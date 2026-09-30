@@ -113,6 +113,17 @@ RSpec.describe Integrations::OnyxMcp::Client do
     expect(search.dig('structuredContent', 'results').first['content']).to eq('Invoice docs')
   end
 
+  it 'cuts the query to the 2048 characters Onyx accepts' do
+    stub_handshake
+    tool_request = stub_request(:post, 'https://cloud.onyx.app/mcp')
+                   .with { |req| JSON.parse(req.body).dig('params', 'arguments', 'query')&.length == 2048 }
+                   .to_return(json_response({ jsonrpc: '2.0', id: 2, result: { structuredContent: { results: [] } } }))
+
+    described_class.new(hook: hook).search_indexed_documents(query: 'a' * 3000, source_types: [])
+
+    expect(tool_request).to have_been_requested
+  end
+
   context 'with whitespace around the configured URL' do
     let(:mcp_url) { " https://cloud.onyx.app/mcp\n" }
 
