@@ -52,6 +52,13 @@ class MessageTranslations::OpenaiSettings
       value.match?(/\A[a-z_]+\z/) ? value : DEFAULT_REASONING_EFFORT
     end
 
+    # Empty leaves the tier to the OpenAI project. Any tier name is passed through, so new OpenAI tiers work without a code change;
+    # OpenaiResponsesClient drops it when the model does not support it.
+    def service_tier(hook)
+      value = hook&.settings&.dig('translation_service_tier').to_s.strip.downcase
+      value if value.match?(/\A[a-z_]+\z/)
+    end
+
     # No upper cap: reasoning tokens count toward the limit, and OpenaiResponsesClient drops a value the model rejects
     def max_output_tokens(hook)
       value = hook&.settings&.dig('translation_max_output_tokens').presence
@@ -71,6 +78,8 @@ class MessageTranslations::OpenaiSettings
     def apply_model_options!(body, hook)
       effort = reasoning_effort(hook)
       body[:reasoning] = { effort: effort } unless effort == DEFAULT_REASONING_EFFORT
+      tier = service_tier(hook)
+      body[:service_tier] = tier if tier
       body[:temperature] = temperature(hook)
       body
     end
