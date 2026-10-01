@@ -2,6 +2,8 @@ class ConversationFinder
   attr_reader :current_user, :current_account, :params
 
   DEFAULT_STATUS = 'open'.freeze
+  # The dashboard's default view: a snoozed conversation is still open work that comes back on its own
+  STATUS_GROUPS = { 'open_snoozed' => %w[open snoozed] }.freeze
   SORT_OPTIONS = {
     'last_activity_at_asc' => %w[sort_on_last_activity_at asc],
     'last_activity_at_desc' => %w[sort_on_last_activity_at desc],
@@ -161,7 +163,8 @@ class ConversationFinder
   def filter_by_status
     return if params[:status] == 'all'
 
-    @conversations = @conversations.where(status: params[:status] || DEFAULT_STATUS)
+    status = params[:status] || DEFAULT_STATUS
+    @conversations = @conversations.where(status: STATUS_GROUPS.fetch(status, status))
   end
 
   def filter_by_team

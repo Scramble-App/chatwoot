@@ -20,6 +20,9 @@
       "all": "All"
     },
     "CHAT_STATUS_FILTER_ITEMS": {
+      "open_snoozed": {
+        "TEXT": "Open & snoozed"
+      },
       "open": {
         "TEXT": "Open"
       },

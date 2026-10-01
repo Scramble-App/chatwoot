@@ -29,7 +29,7 @@ const chatSortFilter = useMapGetter('getChatSortFilter');
 const [showActionsDropdown, toggleDropdown] = useToggle();
 
 const currentStatusFilter = computed(() => {
-  return chatStatusFilter.value || wootConstants.STATUS_TYPE.OPEN;
+  return chatStatusFilter.value || wootConstants.STATUS_TYPE.OPEN_SNOOZED;
 });
 
 const currentSortBy = computed(() => {
@@ -39,6 +39,10 @@ const currentSortBy = computed(() => {
 });
 
 const chatStatusOptions = computed(() => [
+  {
+    label: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.open_snoozed.TEXT'),
+    value: 'open_snoozed',
+  },
   {
     label: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.open.TEXT'),
     value: 'open',

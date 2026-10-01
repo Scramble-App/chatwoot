@@ -1,4 +1,5 @@
 import { CONVERSATION_PRIORITY_ORDER } from 'shared/constants/messages';
+import wootConstants from 'dashboard/constants/globals';
 
 export const findPendingMessageIndex = (chat, message) => {
   const { echo_id: tempMessageId } = message;
@@ -7,8 +8,12 @@ export const findPendingMessageIndex = (chat, message) => {
   );
 };
 
-export const filterByStatus = (chatStatus, filterStatus) =>
-  filterStatus === 'all' ? true : chatStatus === filterStatus;
+export const filterByStatus = (chatStatus, filterStatus) => {
+  if (filterStatus === wootConstants.STATUS_TYPE.ALL) return true;
+
+  const statuses = wootConstants.STATUS_GROUPS[filterStatus] || [filterStatus];
+  return statuses.includes(chatStatus);
+};
 
 export const filterByInbox = (shouldFilter, inboxId, chatInboxId) => {
   const isOnInbox = Number(inboxId) === chatInboxId;

@@ -78,6 +78,26 @@ describe('useFilter', () => {
       });
     });
 
+    it('should add both statuses for the open and snoozed view', () => {
+      const { initializeStatusAndAssigneeFilterToModal } = useFilter({
+        filteri18nKey: 'TEST',
+        attributeModel: 'conversation',
+      });
+      const result = initializeStatusAndAssigneeFilterToModal(
+        'open_snoozed',
+        {},
+        ''
+      );
+
+      expect(result.values).toEqual([
+        { id: 'open', name: 'CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.open.TEXT' },
+        {
+          id: 'snoozed',
+          name: 'CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.snoozed.TEXT',
+        },
+      ]);
+    });
+
     it('should return null when no active filters', () => {
       const { initializeStatusAndAssigneeFilterToModal } = useFilter({
         filteri18nKey: 'TEST',

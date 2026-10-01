@@ -8,6 +8,7 @@ import {
   snoozedReopenTimeToTimestamp,
   shortenSnoozeTime,
   generateSnoozeSuggestions,
+  snoozedStatusText,
 } from '../snoozeHelpers';
 
 describe('#Snooze Helpers', () => {
@@ -87,6 +88,31 @@ describe('#Snooze Helpers', () => {
       startOfNextMonth.setHours(9, 0, 0, 0);
       expect(findSnoozeTime('until_next_month', today)).toBeCloseTo(
         startOfNextMonth.getTime() / 1000
+      );
+    });
+  });
+
+  describe('snoozedStatusText', () => {
+    const t = key => key;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('names the reopen time', () => {
+      expect(snoozedStatusText(t, '2024-03-05T09:00:00.000Z')).toEqual(
+        `CONVERSATION.HEADER.SNOOZED_UNTIL ${snoozedReopenTime('2024-03-05T09:00:00.000Z')}`
+      );
+    });
+
+    it('says until next reply when there is no reopen time', () => {
+      expect(snoozedStatusText(t, null)).toEqual(
+        'CONVERSATION.HEADER.SNOOZED_UNTIL_NEXT_REPLY'
       );
     });
   });

@@ -5,6 +5,7 @@ import {
   filterByTeam,
   filterByLabel,
   filterByUnattended,
+  filterByStatus,
 } from '../../conversations/helpers';
 
 const conversationList = [
@@ -170,5 +171,20 @@ describe('#filterByUnattended', () => {
   });
   it('returns true if conversation type is unattended and has first reply', () => {
     expect(filterByUnattended(true, 'mentions', 123)).toEqual(true);
+  });
+});
+
+describe('#filterByStatus', () => {
+  it('shows open and snoozed conversations in the default view', () => {
+    expect(filterByStatus('open', 'open_snoozed')).toBe(true);
+    expect(filterByStatus('snoozed', 'open_snoozed')).toBe(true);
+    expect(filterByStatus('pending', 'open_snoozed')).toBe(false);
+    expect(filterByStatus('resolved', 'open_snoozed')).toBe(false);
+  });
+
+  it('keeps single statuses and all as before', () => {
+    expect(filterByStatus('open', 'open')).toBe(true);
+    expect(filterByStatus('snoozed', 'open')).toBe(false);
+    expect(filterByStatus('resolved', 'all')).toBe(true);
   });
 });

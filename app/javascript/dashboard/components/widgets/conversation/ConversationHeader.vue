@@ -10,7 +10,7 @@ import Avatar from 'next/avatar/Avatar.vue';
 import SLACardLabel from './components/SLACardLabel.vue';
 import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
-import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
+import { snoozedStatusText } from 'dashboard/helper/snoozeHelpers';
 import { useInbox } from 'dashboard/composables/useInbox';
 import { useI18n } from 'vue-i18n';
 import { copyTextToClipboard } from 'shared/helpers/clipboard';
@@ -75,13 +75,9 @@ const isSnoozed = computed(
   () => currentChat.value.status === wootConstants.STATUS_TYPE.SNOOZED
 );
 
-const snoozedDisplayText = computed(() => {
-  const { snoozed_until: snoozedUntil } = currentChat.value;
-  if (snoozedUntil) {
-    return `${t('CONVERSATION.HEADER.SNOOZED_UNTIL')} ${snoozedReopenTime(snoozedUntil)}`;
-  }
-  return t('CONVERSATION.HEADER.SNOOZED_UNTIL_NEXT_REPLY');
-});
+const snoozedDisplayText = computed(() =>
+  snoozedStatusText(t, currentChat.value.snoozed_until)
+);
 
 const inbox = computed(() => {
   const { inbox_id: inboxId } = props.chat;
