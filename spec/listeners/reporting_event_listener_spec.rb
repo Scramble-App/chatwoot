@@ -233,7 +233,13 @@ describe ReportingEventListener do
   end
 
   describe '#first_reply_created' do
+    def create_customer_message(conversation, created_at: conversation.created_at)
+      create(:message, message_type: 'incoming', account: account, inbox: conversation.inbox, conversation: conversation,
+                       created_at: created_at)
+    end
+
     it 'creates first_response event' do
+      create_customer_message(conversation)
       previous_count = account.reporting_events.where(name: 'first_response').count
       event = Events::Base.new('first.reply.created', Time.zone.now, message: message)
       listener.first_reply_created(event)
@@ -253,6 +259,7 @@ describe ReportingEventListener do
       end
 
       it 'creates first_response event with business hour value' do
+        create_customer_message(new_conversation)
         event = Events::Base.new('first.reply.created', Time.zone.now, message: new_message)
         listener.first_reply_created(event)
         reporting_event = account.reporting_events.where(name: 'first_response').first
@@ -273,6 +280,7 @@ describe ReportingEventListener do
       end
 
       it 'creates first_response event with handoff value' do
+        create_customer_message(new_conversation)
         # this will create a handoff event
         event = Events::Base.new('conversation.bot_handoff', conversation_updated_at, conversation: new_conversation)
         listener.conversation_bot_handoff(event)
@@ -282,6 +290,23 @@ describe ReportingEventListener do
         listener.first_reply_created(event)
         expect(account.reporting_events.where(name: 'first_response')[0]['value']).to be 42.0
       end
+    end
+
+    it 'skips a conversation that an agent started, since no customer is waiting for a first response' do
+      event = Events::Base.new('first.reply.created', Time.zone.now, message: message)
+
+      expect { listener.first_reply_created(event) }.not_to(change { account.reporting_events.where(name: 'first_response').count })
+    end
+
+    it 'times a conversation started by a campaign from the customer reply' do
+      campaign_conversation = create(:conversation, account: account, inbox: inbox, assignee: user, created_at: 3.hours.ago)
+      create_customer_message(campaign_conversation, created_at: 2.hours.ago)
+      reply = create(:message, message_type: 'outgoing', account: account, inbox: inbox, conversation: campaign_conversation,
+                               sender: user, created_at: 1.hour.ago)
+
+      listener.first_reply_created(Events::Base.new('first.reply.created', reply.created_at, message: reply))
+
+      expect(account.reporting_events.find_by(name: 'first_response', conversation_id: campaign_conversation.id).value).to be_within(1).of(3600)
     end
   end
 
