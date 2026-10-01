@@ -292,6 +292,12 @@ RSpec.describe Account do
         expect(account).not_to be_valid
         expect(account.errors[:reporting_timezone]).to include(I18n.t('errors.account.reporting_timezone.invalid'))
       end
+
+      it 'rejects a Rails timezone name, which the dashboard and agent schedules cannot use' do
+        account.reporting_timezone = 'Tallinn'
+
+        expect(account).not_to be_valid
+      end
     end
   end
 

@@ -190,8 +190,9 @@ class Account < ApplicationRecord
     # method overridden in enterprise module
   end
 
+  # Reports and agent schedules work with IANA timezones, so a Rails name such as "Tallinn" is not accepted
   def validate_reporting_timezone
-    return if reporting_timezone.blank? || ActiveSupport::TimeZone[reporting_timezone].present?
+    return if reporting_timezone.blank? || TZInfo::Timezone.all_identifiers.include?(reporting_timezone)
 
     errors.add(:reporting_timezone, I18n.t('errors.account.reporting_timezone.invalid'))
   end
