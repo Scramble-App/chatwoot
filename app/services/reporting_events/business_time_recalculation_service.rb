@@ -34,7 +34,7 @@ class ReportingEvents::BusinessTimeRecalculationService
     return if value.nil? || value == event.value_in_business_hours
 
     @changed_count += 1
-    @changed_dates << event.created_at
+    @changed_dates << event.created_at.in_time_zone(rollup_zone).to_date if rollup_zone
     # rubocop:disable Rails/SkipsModelValidations
     event.update_columns(value_in_business_hours: value) unless dry_run
     # rubocop:enable Rails/SkipsModelValidations
@@ -55,12 +55,13 @@ class ReportingEvents::BusinessTimeRecalculationService
     end
   end
 
-  def rebuild_rollups
-    zone = ActiveSupport::TimeZone[account.reporting_timezone.to_s]
-    return if zone.blank?
+  # Rollups are only collected for an account with a reporting timezone, by day in that timezone
+  def rollup_zone
+    @rollup_zone = ActiveSupport::TimeZone[account.reporting_timezone.to_s] unless defined?(@rollup_zone)
+    @rollup_zone
+  end
 
-    @changed_dates.map { |time| time.in_time_zone(zone).to_date }.uniq.each do |date|
-      ReportingEvents::BackfillService.backfill_date(account, date)
-    end
+  def rebuild_rollups
+    @changed_dates.each { |date| ReportingEvents::BackfillService.backfill_date(account, date) }
   end
 end
