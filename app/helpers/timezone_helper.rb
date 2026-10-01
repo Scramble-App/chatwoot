@@ -1,4 +1,10 @@
 module TimezoneHelper
+  # Reports use the account's reporting timezone when it is set, so every viewer sees the same days and hours
+  def account_report_timezone(account)
+    timezone = account&.reporting_timezone
+    timezone if timezone.present? && ActiveSupport::TimeZone[timezone].present?
+  end
+
   def timezone_name_from_params(timezone, offset)
     return timezone if timezone.present? && ActiveSupport::TimeZone[timezone].present?
 

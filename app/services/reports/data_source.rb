@@ -55,7 +55,7 @@ class Reports::DataSource
   end
 
   def timezone
-    @timezone ||= timezone_name_from_offset(timezone_offset)
+    @timezone ||= account_report_timezone(account) || timezone_name_from_offset(timezone_offset)
   end
 
   def use_business_hours?

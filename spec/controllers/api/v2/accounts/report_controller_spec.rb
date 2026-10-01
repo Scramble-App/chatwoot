@@ -439,6 +439,22 @@ RSpec.describe 'Reports API', type: :request do
 
         expect(response).to have_http_status(:success)
       end
+
+      it 'lists the hours of the account reports timezone' do
+        account.update!(reporting_timezone: 'Europe/Tallinn')
+        created_at = Time.current.utc.beginning_of_day - 2.days + 7.hours
+        create(:conversation, account: account, inbox: inbox, assignee: user, created_at: created_at)
+        local_time = created_at.in_time_zone('Europe/Tallinn')
+
+        get "/api/v2/accounts/#{account.id}/reports/conversation_traffic.csv",
+            params: params,
+            headers: admin.create_new_auth_token
+
+        rows = CSV.parse(response.body).compact_blank
+        date_column = rows.find { |row| row.first == 'Start of the hour' }.index(local_time.to_date.to_s)
+        hour_row = rows.find { |row| row.first == format('%02d:00', local_time.hour) }
+        expect(hour_row[date_column]).to eq('1')
+      end
     end
   end
 

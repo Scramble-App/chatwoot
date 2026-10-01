@@ -93,6 +93,24 @@ describe V2::Reports::Timeseries::ReportBuilder do
         end
       end
 
+      context 'when the account has a reports timezone' do
+        let(:timezone_offset) { '5.5' }
+        let(:group_by) { 'week' }
+
+        before { account.update!(reporting_timezone: 'Europe/Tallinn') }
+
+        it 'groups by the account timezone instead of the viewer offset' do
+          timestamps = subject.timeseries.pluck(:timestamp)
+
+          expect(timestamps).to eq(
+            [
+              (current_time - 1.week).in_time_zone('Europe/Tallinn').beginning_of_week(:sunday).to_i,
+              current_time.in_time_zone('Europe/Tallinn').beginning_of_week(:sunday).to_i
+            ]
+          )
+        end
+      end
+
       context 'when timezone offset is provided' do
         let(:timezone_offset) { '5.5' }
         let(:group_by) { 'week' }

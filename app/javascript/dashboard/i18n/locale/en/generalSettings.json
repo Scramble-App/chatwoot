@@ -104,6 +104,15 @@
           "ERROR": "Failed to update audio transcription setting"
         }
       },
+      "REPORTS_TIMEZONE": {
+        "TITLE": "Reports timezone",
+        "NOTE": "Reports count days and hours in this timezone for everyone who opens them. Without it, each viewer sees reports in their own browser timezone.",
+        "BROWSER": "Viewer's browser timezone",
+        "API": {
+          "SUCCESS": "Reports timezone updated successfully",
+          "ERROR": "Failed to update the reports timezone"
+        }
+      },
       "AUTO_RESOLVE_DURATION": {
         "LABEL": "Inactivity duration for resolution",
         "HELP": "Duration after a conversation should auto resolve if there is no activity",

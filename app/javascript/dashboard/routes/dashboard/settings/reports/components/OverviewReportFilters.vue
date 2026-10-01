@@ -1,7 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getUnixStartOfDay, getUnixEndOfDay } from 'helpers/DateHelper';
+import {
+  getUnixStartOfDay,
+  getUnixEndOfDay,
+  fromUnixTimeInZone,
+} from 'helpers/DateHelper';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
 import subDays from 'date-fns/subDays';
 import WootDatePicker from 'dashboard/components/ui/DatePicker/DatePicker.vue';
 import ToggleSwitch from 'dashboard/components-next/switch/Switch.vue';
@@ -22,6 +27,7 @@ const emit = defineEmits(['filterChange']);
 
 const route = useRoute();
 const router = useRouter();
+const reportTimezone = useReportTimezone();
 
 const customDateRange = ref([subDays(new Date(), 6), new Date()]);
 const selectedDateRange = ref(DATE_RANGE_TYPES.LAST_7_DAYS);
@@ -29,8 +35,8 @@ const businessHoursSelected = ref(false);
 
 const updateURLParams = () => {
   const params = generateReportURLParams({
-    from: getUnixStartOfDay(customDateRange.value[0]),
-    to: getUnixEndOfDay(customDateRange.value[1]),
+    from: getUnixStartOfDay(customDateRange.value[0], reportTimezone.value),
+    to: getUnixEndOfDay(customDateRange.value[1], reportTimezone.value),
     businessHours: businessHoursSelected.value,
     range: selectedDateRange.value,
   });
@@ -41,8 +47,8 @@ const updateURLParams = () => {
 const emitChange = () => {
   updateURLParams();
   emit('filterChange', {
-    from: getUnixStartOfDay(customDateRange.value[0]),
-    to: getUnixEndOfDay(customDateRange.value[1]),
+    from: getUnixStartOfDay(customDateRange.value[0], reportTimezone.value),
+    to: getUnixEndOfDay(customDateRange.value[1], reportTimezone.value),
     businessHours: businessHoursSelected.value,
   });
 };
@@ -69,8 +75,8 @@ const initializeFromURL = () => {
   // Restore dates from URL if available
   if (urlParams.from && urlParams.to) {
     customDateRange.value = [
-      new Date(urlParams.from * 1000),
-      new Date(urlParams.to * 1000),
+      fromUnixTimeInZone(urlParams.from, reportTimezone.value),
+      fromUnixTimeInZone(urlParams.to, reportTimezone.value),
     ];
   }
 
