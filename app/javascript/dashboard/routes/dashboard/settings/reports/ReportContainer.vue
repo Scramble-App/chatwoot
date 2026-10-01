@@ -2,7 +2,8 @@
 import { mapGetters } from 'vuex';
 import { useReportMetrics } from 'dashboard/composables/useReportMetrics';
 import { GROUP_BY_FILTER, METRIC_CHART } from './constants';
-import fromUnixTime from 'date-fns/fromUnixTime';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
+import { fromUnixTimeInZone } from 'helpers/DateHelper';
 import format from 'date-fns/format';
 import { formatTime } from '@chatwoot/utils';
 import ChartStats from './components/ChartElements/ChartStats.vue';
@@ -40,7 +41,8 @@ export default {
     const { calculateTrend, isAverageMetricType } = useReportMetrics(
       props.accountSummaryKey
     );
-    return { calculateTrend, isAverageMetricType };
+    const reportTimezone = useReportTimezone();
+    return { calculateTrend, isAverageMetricType, reportTimezone };
   },
   computed: {
     ...mapGetters({
@@ -71,24 +73,24 @@ export default {
       }
       const data = this.accountReport.data[metric.KEY];
       const labels = data.map(element => {
+        const date = fromUnixTimeInZone(element.timestamp, this.reportTimezone);
         if (this.groupBy?.period === GROUP_BY_FILTER[2].period) {
-          let week_date = new Date(fromUnixTime(element.timestamp));
-          const first_day = week_date.getDate() - week_date.getDay();
+          const first_day = date.getDate() - date.getDay();
           const last_day = first_day + 6;
-          const week_first_date = new Date(week_date.setDate(first_day));
-          const week_last_date = new Date(week_date.setDate(last_day));
+          const week_first_date = new Date(date.setDate(first_day));
+          const week_last_date = new Date(date.setDate(last_day));
           return `${format(week_first_date, 'dd-MMM')} - ${format(
             week_last_date,
             'dd-MMM'
           )}`;
         }
         if (this.groupBy?.period === GROUP_BY_FILTER[3].period) {
-          return format(fromUnixTime(element.timestamp), 'MMM-yyyy');
+          return format(date, 'MMM-yyyy');
         }
         if (this.groupBy?.period === GROUP_BY_FILTER[4].period) {
-          return format(fromUnixTime(element.timestamp), 'yyyy');
+          return format(date, 'yyyy');
         }
-        return format(fromUnixTime(element.timestamp), 'dd-MMM');
+        return format(date, 'dd-MMM');
       });
       const datasets = METRIC_CHART[metric.KEY].datasets.map(dataset => {
         switch (dataset.type) {

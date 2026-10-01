@@ -3,8 +3,13 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SLAFilter from '../SLA/SLAFilter.vue';
 import WootDatePicker from 'dashboard/components/ui/DatePicker/DatePicker.vue';
-import { subDays, fromUnixTime } from 'date-fns';
-import { getUnixStartOfDay, getUnixEndOfDay } from 'helpers/DateHelper';
+import { subDays } from 'date-fns';
+import {
+  getUnixStartOfDay,
+  getUnixEndOfDay,
+  fromUnixTimeInZone,
+} from 'helpers/DateHelper';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
 import {
   generateReportURLParams,
   parseReportURLParams,
@@ -15,20 +20,28 @@ const emit = defineEmits(['filterChange']);
 
 const route = useRoute();
 const router = useRouter();
+const reportTimezone = useReportTimezone();
 
 // Initialize from URL params immediately
 const urlParams = parseReportURLParams(route.query);
 const initialDateRange =
   urlParams.from && urlParams.to
-    ? [fromUnixTime(urlParams.from), fromUnixTime(urlParams.to)]
+    ? [
+        fromUnixTimeInZone(urlParams.from, reportTimezone.value),
+        fromUnixTimeInZone(urlParams.to, reportTimezone.value),
+      ]
     : [subDays(new Date(), 6), new Date()];
 
 const selectedDateRange = ref(urlParams.range || 'last7days');
 const selectedGroupByFilter = ref(null);
 const customDateRange = ref(initialDateRange);
 
-const to = computed(() => getUnixEndOfDay(customDateRange.value[1]));
-const from = computed(() => getUnixStartOfDay(customDateRange.value[0]));
+const to = computed(() =>
+  getUnixEndOfDay(customDateRange.value[1], reportTimezone.value)
+);
+const from = computed(() =>
+  getUnixStartOfDay(customDateRange.value[0], reportTimezone.value)
+);
 
 const updateURLParams = () => {
   const dateParams = generateReportURLParams({

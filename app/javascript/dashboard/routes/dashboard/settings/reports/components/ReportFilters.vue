@@ -3,7 +3,12 @@ import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
-import { getUnixStartOfDay, getUnixEndOfDay } from 'helpers/DateHelper';
+import {
+  getUnixStartOfDay,
+  getUnixEndOfDay,
+  fromUnixTimeInZone,
+} from 'helpers/DateHelper';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
 import subDays from 'date-fns/subDays';
 import differenceInDays from 'date-fns/differenceInDays';
 import ActiveFilterChip from './Filters/v3/ActiveFilterChip.vue';
@@ -48,6 +53,7 @@ const { t } = useI18n();
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
+const reportTimezone = useReportTimezone();
 
 const buildReportFilterList = (items, type) => {
   if (!Array.isArray(items)) return [];
@@ -76,7 +82,7 @@ const showGroupByDropdown = ref(false);
 const activeFilterType = ref('');
 const customDateRange = ref([subDays(new Date(), 6), new Date()]);
 const selectedDateRange = ref(DATE_RANGE_TYPES.LAST_7_DAYS);
-const businessHoursSelected = ref(false);
+const businessHoursSelected = ref(true);
 const groupBy = ref(GROUP_BY_FILTER[1]);
 const groupByfilterItemsList = ref([{ id: 1, name: 'Day' }]);
 
@@ -96,8 +102,12 @@ const filterSource = computed(() => {
   return sources[props.filterType] || [];
 });
 
-const from = computed(() => getUnixStartOfDay(customDateRange.value[0]));
-const to = computed(() => getUnixEndOfDay(customDateRange.value[1]));
+const from = computed(() =>
+  getUnixStartOfDay(customDateRange.value[0], reportTimezone.value)
+);
+const to = computed(() =>
+  getUnixEndOfDay(customDateRange.value[1], reportTimezone.value)
+);
 
 const daysDifference = computed(() => {
   return differenceInDays(customDateRange.value[1], customDateRange.value[0]);
@@ -288,12 +298,12 @@ const initializeFromURL = () => {
   // Restore dates from URL if available
   if (urlParams.from && urlParams.to) {
     customDateRange.value = [
-      new Date(urlParams.from * 1000),
-      new Date(urlParams.to * 1000),
+      fromUnixTimeInZone(urlParams.from, reportTimezone.value),
+      fromUnixTimeInZone(urlParams.to, reportTimezone.value),
     ];
   }
 
-  if (urlParams.businessHours) {
+  if (urlParams.businessHours !== null) {
     businessHoursSelected.value = urlParams.businessHours;
   }
 

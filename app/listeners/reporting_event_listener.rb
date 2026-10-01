@@ -27,23 +27,24 @@ class ReportingEventListener < BaseListener
   def first_reply_created(event)
     message = extract_message_and_account(event)[0]
     conversation = message.conversation
-    first_response_time = message.created_at.to_i - last_non_human_activity(conversation).to_i
+    start_time = first_response_start_time(conversation, message)
+    return if start_time.blank?
 
     reporting_event = ReportingEvent.new(
       name: 'first_response',
-      value: first_response_time,
-      value_in_business_hours: business_hours(conversation.inbox, last_non_human_activity(conversation),
-                                              message.created_at),
+      value: message.created_at.to_i - start_time.to_i,
+      value_in_business_hours: business_hours(conversation.inbox, start_time, message.created_at),
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: message.sender_id,
       conversation_id: conversation.id,
-      event_start_time: last_non_human_activity(conversation),
+      event_start_time: start_time,
       event_end_time: message.created_at
     )
 
     reporting_event.save!
     safe_rollup(reporting_event)
+    create_agent_response_event('agent_first_response', message, start_time)
   end
 
   def reply_created(event)
@@ -69,6 +70,7 @@ class ReportingEventListener < BaseListener
     )
     reporting_event.save!
     safe_rollup(reporting_event)
+    create_agent_response_event('agent_reply_time', message, waiting_since)
   end
 
   def conversation_bot_handoff(event)
@@ -132,6 +134,39 @@ class ReportingEventListener < BaseListener
   end
 
   private
+
+  # A first response answers a customer, so it is timed from the customer's first message. A conversation that an
+  # agent started, e.g. with a WhatsApp template, has no customer waiting and gets no first response event;
+  # one started by a campaign is timed from the customer's reply, not from the campaign message.
+  def first_response_start_time(conversation, message)
+    first_customer_message_at = conversation.messages.incoming.where(created_at: ..message.created_at).minimum(:created_at)
+    return if first_customer_message_at.blank?
+
+    [last_non_human_activity(conversation), first_customer_message_at].max
+  end
+
+  # Agent reports time a reply from when the conversation was assigned to the replying agent, when that was after the
+  # customer started waiting, so a customer left unanswered on the previous agent's shift is not counted against the
+  # agent who took the conversation over. Its business time is counted in the agent's own shifts.
+  def create_agent_response_event(name, message, waiting_since)
+    agent = message.sender
+    return unless agent.is_a?(User)
+
+    conversation = message.conversation
+    start_time = [waiting_since, last_assigned_at(conversation, agent, message.created_at)].compact.max
+
+    ReportingEvent.create!(
+      name: name,
+      value: message.created_at.to_i - start_time.to_i,
+      value_in_business_hours: business_hours(conversation.inbox, start_time, message.created_at, user: agent),
+      account_id: conversation.account_id,
+      inbox_id: conversation.inbox_id,
+      user_id: agent.id,
+      conversation_id: conversation.id,
+      event_start_time: start_time,
+      event_end_time: message.created_at
+    )
+  end
 
   def create_conversation_opened_event(conversation, time_since_resolved, business_hours_value, start_time, event_end_time)
     reporting_event = ReportingEvent.new(

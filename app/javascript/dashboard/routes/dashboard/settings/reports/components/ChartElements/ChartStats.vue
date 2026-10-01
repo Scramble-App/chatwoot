@@ -24,8 +24,11 @@ const { t } = useI18n();
 const { calculateTrend, displayMetric, isAverageMetricType, fetchingStatus } =
   useReportMetrics(props.accountSummaryKey, props.summaryFetchingKey);
 
+// Fewer conversations with no reply is better, like shorter times
+const LOWER_IS_BETTER_METRICS = ['no_reply_conversations_count'];
+
 const trendColor = (value, key) => {
-  if (isAverageMetricType(key)) {
+  if (isAverageMetricType(key) || LOWER_IS_BETTER_METRICS.includes(key)) {
     return value > 0
       ? 'border-n-ruby-9 text-n-ruby-9'
       : 'border-n-teal-10 text-n-teal-10';

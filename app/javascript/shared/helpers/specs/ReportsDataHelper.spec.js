@@ -131,6 +131,18 @@ describe('groupHeatmapByDay', () => {
     `);
   });
 
+  it('groups by the days and hours of the given timezone', () => {
+    // 30 September 2026, 22:00 UTC is 1 October, 01:00 in Tallinn
+    const heatmapData = [
+      { timestamp: Date.UTC(2026, 8, 30, 22) / 1000, value: 5 },
+    ];
+
+    const [[day, [cell]]] = groupHeatmapByDay(heatmapData, 'Europe/Tallinn');
+
+    expect(day).toEqual('2026-10-01T00:00:00.000Z');
+    expect(cell.hour).toEqual(1);
+  });
+
   it('should group empty heatmap data by day', () => {
     const heatmapData = [];
     const expected = new Map();

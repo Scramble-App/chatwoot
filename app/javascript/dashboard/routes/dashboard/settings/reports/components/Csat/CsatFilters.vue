@@ -3,8 +3,13 @@ import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
-import { subDays, fromUnixTime } from 'date-fns';
-import { getUnixStartOfDay, getUnixEndOfDay } from 'helpers/DateHelper';
+import { subDays } from 'date-fns';
+import {
+  getUnixStartOfDay,
+  getUnixEndOfDay,
+  fromUnixTimeInZone,
+} from 'helpers/DateHelper';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
 import {
   buildFilterList,
   buildRatingsList,
@@ -35,6 +40,7 @@ const { t } = useI18n();
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
+const reportTimezone = useReportTimezone();
 
 // Initialize from URL params immediately
 const urlParams = parseReportURLParams(route.query);
@@ -42,7 +48,10 @@ const urlFilters = parseFilterURLParams(route.query);
 
 const initialDateRange =
   urlParams.from && urlParams.to
-    ? [fromUnixTime(urlParams.from), fromUnixTime(urlParams.to)]
+    ? [
+        fromUnixTimeInZone(urlParams.from, reportTimezone.value),
+        fromUnixTimeInZone(urlParams.to, reportTimezone.value),
+      ]
     : [subDays(new Date(), 6), new Date()];
 
 const showDropdownMenu = ref(false);
@@ -64,8 +73,12 @@ const teams = computed(() => store.getters['teams/getTeams']);
 
 const ratings = computed(() => buildRatingsList(t));
 
-const from = computed(() => getUnixStartOfDay(customDateRange.value[0]));
-const to = computed(() => getUnixEndOfDay(customDateRange.value[1]));
+const from = computed(() =>
+  getUnixStartOfDay(customDateRange.value[0], reportTimezone.value)
+);
+const to = computed(() =>
+  getUnixEndOfDay(customDateRange.value[1], reportTimezone.value)
+);
 
 const getFilterSource = type => {
   const sources = {

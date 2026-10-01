@@ -93,6 +93,31 @@ describe V2::Reports::Timeseries::ReportBuilder do
         end
       end
 
+      context 'when the account has a reports timezone' do
+        let(:timezone_offset) { '5.5' }
+        let(:group_by) { 'week' }
+
+        before { account.update!(reporting_timezone: 'Europe/Tallinn') }
+
+        it 'groups by the account timezone instead of the viewer offset' do
+          timestamps = subject.timeseries.pluck(:timestamp)
+
+          expect(timestamps).to eq(
+            [
+              (current_time - 1.week).in_time_zone('Europe/Tallinn').beginning_of_week(:sunday).to_i,
+              current_time.in_time_zone('Europe/Tallinn').beginning_of_week(:sunday).to_i
+            ]
+          )
+        end
+
+        it 'keeps the viewer offset for a Rails timezone name saved earlier, which the dashboard cannot use' do
+          account.reporting_timezone = 'Tallinn'
+          account.save!(validate: false)
+
+          expect(subject.timeseries.pluck(:timestamp).last).to eq current_time.in_time_zone('Chennai').beginning_of_week(:sunday).to_i
+        end
+      end
+
       context 'when timezone offset is provided' do
         let(:timezone_offset) { '5.5' }
         let(:group_by) { 'week' }
@@ -167,6 +192,39 @@ describe V2::Reports::Timeseries::ReportBuilder do
       context 'when there is no filter applied' do
         it 'returns the correct average value' do
           expect(subject.aggregate_value).to eq 91.0
+        end
+      end
+
+      context 'when the report is for an agent' do
+        let(:agent) { create(:user, account: account) }
+        let(:filter_type) { :agent }
+        let(:filter_id) { agent.id }
+
+        before do
+          # The customer waited 65 minutes, the last 5 of them after the conversation was assigned to the agent
+          create(:reporting_event, name: 'first_response', value: 3900, value_in_business_hours: 3900, account: account,
+                                   created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+          create(:reporting_event, name: 'agent_first_response', value: 300, value_in_business_hours: 300, account: account,
+                                   created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+        end
+
+        it 'times the agent from when the conversation was assigned to them' do
+          expect(subject.aggregate_value).to eq 300.0
+        end
+
+        it 'keeps timing the account from the customer message' do
+          account_builder = described_class.new(account, params.merge(type: :account, id: ''))
+
+          expect(account_builder.aggregate_value).to eq((80 + 100 + 93 + 3900) / 4.0)
+        end
+
+        it 'counts each conversation the agent left without a reply once' do
+          2.times do
+            create(:reporting_event, name: 'agent_handoff_without_reply', value: 600, value_in_business_hours: 600, account: account,
+                                     created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+          end
+
+          expect(described_class.new(account, params.merge(metric: 'no_reply_conversations_count')).aggregate_value).to eq 1
         end
       end
 

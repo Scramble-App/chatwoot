@@ -93,7 +93,11 @@ const columns = computed(() => [
     cell: defaulSpanRender,
   }),
   columnHelper.accessor('avgReplyTime', {
-    header: t('SUMMARY_REPORTS.AVG_REPLY_TIME'),
+    // Agents are timed from when the conversation was assigned to them, not from the customer's message
+    header:
+      props.type === 'agent'
+        ? t('SUMMARY_REPORTS.AVG_AGENT_REPLY_TIME')
+        : t('SUMMARY_REPORTS.AVG_REPLY_TIME'),
     width: 200,
     cell: defaulSpanRender,
   }),
@@ -102,6 +106,16 @@ const columns = computed(() => [
     width: 200,
     cell: defaulSpanRender,
   }),
+  // Conversations that left the agent while the customer was waiting for their reply
+  ...(props.type === 'agent'
+    ? [
+        columnHelper.accessor('noReplyConversationsCount', {
+          header: t('SUMMARY_REPORTS.NO_REPLY_CONVERSATIONS'),
+          width: 200,
+          cell: defaulSpanRender,
+        }),
+      ]
+    : []),
 ]);
 
 const renderAvgTime = value => (value ? formatTime(value) : '--');
@@ -117,6 +131,7 @@ const tableData = computed(() =>
       avgResolutionTime,
       avgReplyTime,
       resolvedConversationsCount,
+      noReplyConversationsCount,
     } = rowMetrics;
     return {
       id: row.id,
@@ -128,6 +143,7 @@ const tableData = computed(() =>
       avgReplyTime: renderAvgTime(avgReplyTime),
       avgResolutionTime: renderAvgTime(avgResolutionTime),
       resolutionsCount: renderCount(resolvedConversationsCount),
+      noReplyConversationsCount: renderCount(noReplyConversationsCount),
     };
   })
 );

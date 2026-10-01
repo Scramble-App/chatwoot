@@ -11,7 +11,10 @@ export const generateReportURLParams = ({
   if (from) params.from = from;
   if (to) params.to = to;
 
-  if (businessHours) params.business_hours = 'true';
+  // Business hours are on by default, so turning them off is kept in the URL too
+  if (typeof businessHours === 'boolean') {
+    params.business_hours = String(businessHours);
+  }
   if (groupBy) params.group_by = groupBy;
 
   // Include range type (last7days, last3months, custom, etc.)
@@ -26,7 +29,7 @@ export const parseReportURLParams = query => {
   return {
     from: from ? Number(from) : null,
     to: to ? Number(to) : null,
-    businessHours: business_hours === 'true',
+    businessHours: business_hours ? business_hours === 'true' : null,
     groupBy: group_by ? Number(group_by) : null,
     range: range || null,
   };

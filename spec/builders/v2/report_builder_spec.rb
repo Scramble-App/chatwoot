@@ -25,13 +25,14 @@ describe V2::ReportBuilder do
             conversation = create(:conversation, account: account,
                                                  inbox: inbox, assignee: user,
                                                  created_at: Time.zone.today)
-            create_list(:message, 5, message_type: 'outgoing',
-                                     account: account, inbox: inbox,
-                                     conversation: conversation, created_at: Time.zone.today + 2.hours)
+            # The customer writes first, so the agent's reply is a first response
             create_list(:message, 2, message_type: 'incoming',
                                      account: account, inbox: inbox,
                                      conversation: conversation,
-                                     created_at: Time.zone.today + 3.hours)
+                                     created_at: Time.zone.today + 1.hour)
+            create_list(:message, 5, message_type: 'outgoing',
+                                     account: account, inbox: inbox,
+                                     conversation: conversation, created_at: Time.zone.today + 2.hours)
             conversation.update_labels('label_1')
             conversation.label_list
             conversation.save!
@@ -41,11 +42,11 @@ describe V2::ReportBuilder do
             conversation = create(:conversation, account: account,
                                                  inbox: inbox, assignee: user,
                                                  created_at: (Time.zone.today - 2.days))
-            create_list(:message, 3, message_type: 'outgoing',
+            create_list(:message, 1, message_type: 'incoming',
                                      account: account, inbox: inbox,
                                      conversation: conversation,
                                      created_at: (Time.zone.today - 2.days))
-            create_list(:message, 1, message_type: 'incoming',
+            create_list(:message, 3, message_type: 'outgoing',
                                      account: account, inbox: inbox,
                                      conversation: conversation,
                                      created_at: (Time.zone.today - 2.days))
@@ -242,7 +243,8 @@ describe V2::ReportBuilder do
         builder = described_class.new(account, params)
         metrics = builder.timeseries
 
-        expect(metrics[Time.zone.today].to_f).to be 0.48e4
+        # 10 replies an hour after the customer wrote and 5 right away
+        expect(metrics[Time.zone.today].to_f).to be 0.24e4
       end
 
       it 'returns summary' do

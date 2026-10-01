@@ -1,4 +1,4 @@
-module Reports::ReportMetricRegistry
+module Reports::ReportMetricRegistry # rubocop:disable Metrics/ModuleLength
   # Describes one public report metric.
   # name: API-facing metric name requested by reports.
   # aggregate: whether the metric is a count or average.
@@ -88,6 +88,14 @@ module Reports::ReportMetricRegistry
       raw_event_name: :conversation_bot_handoff,
       rollup_metric: :bot_handoffs_count,
       raw_count_strategy: :distinct_conversation
+    ),
+    # Conversations that left an agent while the customer was waiting for their reply, for agent reports
+    no_reply_conversations_count: Metric.new(
+      name: :no_reply_conversations_count,
+      aggregate: :count,
+      raw_event_name: :agent_handoff_without_reply,
+      summary_key: :no_reply_conversations_count,
+      raw_count_strategy: :distinct_conversation
     )
   }.freeze
 
@@ -96,6 +104,7 @@ module Reports::ReportMetricRegistry
     avg_resolution_time
     avg_first_response_time
     reply_time
+    no_reply_conversations_count
   ].freeze
 
   module_function

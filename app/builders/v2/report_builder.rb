@@ -1,6 +1,7 @@
 class V2::ReportBuilder
   include DateRangeHelper
   include ReportHelper
+  include TimezoneHelper
 
   attr_reader :account, :params
 
@@ -12,7 +13,7 @@ class V2::ReportBuilder
     @params = params
 
     timezone_offset = (params[:timezone_offset] || 0).to_f
-    @timezone = ActiveSupport::TimeZone[timezone_offset]&.name
+    @timezone = account_report_timezone(account) || ActiveSupport::TimeZone[timezone_offset]&.name
   end
 
   def timeseries

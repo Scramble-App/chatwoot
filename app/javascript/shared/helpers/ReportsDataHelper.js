@@ -1,10 +1,5 @@
-import {
-  fromUnixTime,
-  startOfDay,
-  endOfDay,
-  getUnixTime,
-  subDays,
-} from 'date-fns';
+import { startOfDay, endOfDay, getUnixTime, subDays } from 'date-fns';
+import { fromUnixTimeInZone } from './DateHelper';
 
 /**
  * Returns a key-value pair of timestamp and value for heatmap data
@@ -90,15 +85,16 @@ export const reconcileHeatmapData = (data, dataFromStore) => {
  * Groups heatmap data by day
  *
  * @param {Array} heatmapData - An array of objects containing timestamp, value and other properties
+ * @param {string|null} timeZone - Timezone of the days and hours, the browser timezone by default
  * @returns {Map} - A Map object with dates as keys and corresponding data objects as values
  */
-export const groupHeatmapByDay = heatmapData => {
+export const groupHeatmapByDay = (heatmapData, timeZone = null) => {
   return heatmapData.reduce((acc, data) => {
-    const date = fromUnixTime(data.timestamp);
+    const date = fromUnixTimeInZone(data.timestamp, timeZone);
     const mapKey = startOfDay(date).toISOString();
     const dataToAppend = {
       ...data,
-      date: fromUnixTime(data.timestamp),
+      date,
       hour: date.getHours(),
     };
     if (!acc.has(mapKey)) {

@@ -16,6 +16,7 @@ class V2::Reports::BaseSummaryBuilder
     @avg_resolution_time = results.transform_values { |data| data[:avg_resolution_time] }
     @avg_first_response_time = results.transform_values { |data| data[:avg_first_response_time] }
     @avg_reply_time = results.transform_values { |data| data[:avg_reply_time] }
+    @no_reply_count = results.transform_values { |data| data[:no_reply_conversations_count] }
   end
 
   def group_by_key

@@ -57,12 +57,12 @@ module Api::V2::Accounts::HeatmapHelper
   end
 
   def generate_heatmap_data_for_timezone(offset)
-    timezone = ActiveSupport::TimeZone[offset]&.name
+    timezone = account_report_timezone(Current.account) || ActiveSupport::TimeZone[offset]&.name
     timezone_today = DateTime.now.in_time_zone(timezone).beginning_of_day
 
     timezone_data_raw = generate_heatmap_data(timezone_today, offset)
 
-    transform_data(timezone_data_raw, false)
+    transform_data(timezone_data_raw, timezone)
   end
 
   def generate_heatmap_data(date, offset)
@@ -80,17 +80,16 @@ module Api::V2::Accounts::HeatmapHelper
                                                                })).build
   end
 
-  def transform_data(data, zone_transform)
-    # rubocop:disable Rails/TimeZone
+  def transform_data(data, timezone)
+    # The hours are those of the report timezone, which the data was grouped by, not the server's
     data.map do |d|
-      date = zone_transform ? Time.zone.at(d[:timestamp]) : Time.at(d[:timestamp])
+      date = Time.zone.at(d[:timestamp]).in_time_zone(timezone)
       {
         date: date.to_date.to_s,
         hour: date.hour,
         value: d[:value]
       }
     end
-    # rubocop:enable Rails/TimeZone
   end
 
   def since_timestamp(date)

@@ -6,6 +6,12 @@ import BaseHeatmap from './BaseHeatmap.vue';
 import HeatmapDateRangeSelector from './HeatmapDateRangeSelector.vue';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useLiveRefresh } from 'dashboard/composables/useLiveRefresh';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
+import {
+  getUnixStartOfDay,
+  getUnixEndOfDay,
+  fromUnixTimeInZone,
+} from 'helpers/DateHelper';
 import differenceInCalendarDays from 'date-fns/differenceInCalendarDays';
 import endOfDay from 'date-fns/endOfDay';
 import format from 'date-fns/format';
@@ -55,6 +61,7 @@ const props = defineProps({
 
 const store = useStore();
 const { t } = useI18n();
+const reportTimezone = useReportTimezone();
 
 const uiFlags = useMapGetter('getOverviewUIFlags');
 const heatmapData = useMapGetter(props.storeGetter);
@@ -166,7 +173,7 @@ const downloadHeatmapData = () => {
 
   // Convert heatmap data to rows
   heatmapData.value.forEach(item => {
-    const date = new Date(item.timestamp * 1000);
+    const date = fromUnixTimeInZone(item.timestamp, reportTimezone.value);
     const dateStr = format(date, 'yyyy-MM-dd');
     const hour = date.getHours();
     rows.push([dateStr, `${hour}:00 - ${hour + 1}:00`, item.value]);
@@ -204,8 +211,8 @@ const fetchHeatmapData = () => {
 
   const params = {
     metric: props.metric,
-    from: getUnixTime(from),
-    to: getUnixTime(to),
+    from: getUnixStartOfDay(from, reportTimezone.value),
+    to: getUnixEndOfDay(to, reportTimezone.value),
     groupBy: 'hour',
     businessHours: false,
   };

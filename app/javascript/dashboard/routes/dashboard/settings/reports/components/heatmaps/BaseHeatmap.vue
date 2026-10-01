@@ -8,6 +8,7 @@ import getDay from 'date-fns/getDay';
 import { getQuantileIntervals } from '@chatwoot/utils';
 
 import { groupHeatmapByDay } from 'helpers/ReportsDataHelper';
+import { useReportTimezone } from 'dashboard/composables/useReportTimezone';
 import { useI18n } from 'vue-i18n';
 import { useHeatmapTooltip } from './composables/useHeatmapTooltip';
 import HeatmapTooltip from './HeatmapTooltip.vue';
@@ -32,9 +33,13 @@ const props = defineProps({
   },
 });
 const { t } = useI18n();
+const reportTimezone = useReportTimezone();
 
 const dataRows = computed(() => {
-  const groupedData = groupHeatmapByDay(props.heatmapData);
+  const groupedData = groupHeatmapByDay(
+    props.heatmapData,
+    reportTimezone.value
+  );
   return Array.from(groupedData.keys()).map(dateKey => {
     const rowData = groupedData.get(dateKey);
     return {

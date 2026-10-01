@@ -292,6 +292,26 @@ RSpec.describe 'Accounts API', type: :request do
         end
       end
 
+      it 'saves the timezone that reports use' do
+        patch "/api/v1/accounts/#{account.id}",
+              params: { reporting_timezone: 'Europe/Tallinn' },
+              headers: admin.create_new_auth_token,
+              as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(account.reload.reporting_timezone).to eq('Europe/Tallinn')
+      end
+
+      it 'rejects an unknown reports timezone' do
+        patch "/api/v1/accounts/#{account.id}",
+              params: { reporting_timezone: 'Mars/Olympus' },
+              headers: admin.create_new_auth_token,
+              as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(account.reload.reporting_timezone).to be_nil
+      end
+
       it 'updates onboarding step to invite_team if onboarding step is present in account custom attributes' do
         account.update(custom_attributes: { onboarding_step: 'account_update' })
         patch "/api/v1/accounts/#{account.id}",
