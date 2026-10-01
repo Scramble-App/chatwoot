@@ -7,7 +7,7 @@ module Api::V2::Accounts::ReportsHelper
 
     Current.account.users.map do |agent|
       report = reports.find { |r| r[:id] == agent.id }
-      [agent.name] + generate_readable_report_metrics(report)
+      [agent.name] + generate_readable_report_metrics(report) + [report[:no_reply_conversations_count]]
     end
   end
 

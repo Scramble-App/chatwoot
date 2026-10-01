@@ -3,6 +3,11 @@ module ReportingEventHelper
     ReportingEvents::BusinessTime.new(inbox, user: user).seconds_between(from, to)
   end
 
+  # A snapshot only records who was assigned when the assignment history started, not when they were assigned
+  def last_assigned_at(conversation, agent, time)
+    conversation.assignment_events.where(to_assignee_id: agent.id, occurred_at: ..time).where.not(event_type: 'snapshot').maximum(:occurred_at)
+  end
+
   def last_non_human_activity(conversation)
     # Try to get either a handoff or reopened event first
     # These will always take precedence over any other activity

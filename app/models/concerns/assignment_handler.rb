@@ -45,11 +45,13 @@ module AssignmentHandler
     return unless saved_change_to_assignee_id?
 
     from_assignee_id, to_assignee_id = previous_changes[:assignee_id]
-    ConversationAssignmentEvents::Recorder.record!(
+    assignment_event = ConversationAssignmentEvents::Recorder.record!(
       conversation: self,
       from_assignee_id: from_assignee_id,
       to_assignee_id: to_assignee_id
     )
+    # The customer is still waiting for a reply from the agent the conversation leaves
+    ReportingEvents::HandoffWithoutReplyJob.perform_later(assignment_event, waiting_since) if from_assignee_id.present? && waiting_since.present?
   end
 
   def process_assignment_activities

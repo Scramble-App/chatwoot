@@ -75,7 +75,8 @@ RSpec.describe Reports::ReportMetricRegistry do
           [:resolutions_count, :resolved_conversations_count, :count, :conversation_resolved, :resolutions_count],
           [:avg_resolution_time, :avg_resolution_time, :average, :conversation_resolved, :resolution_time],
           [:avg_first_response_time, :avg_first_response_time, :average, :first_response, :first_response],
-          [:reply_time, :avg_reply_time, :average, :reply_time, :reply_time]
+          [:reply_time, :avg_reply_time, :average, :reply_time, :reply_time],
+          [:no_reply_conversations_count, :no_reply_conversations_count, :count, :agent_handoff_without_reply, nil]
         ]
       )
     end

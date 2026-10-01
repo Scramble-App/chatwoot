@@ -184,6 +184,7 @@ en:
       avg_resolution_time: Avg resolution time
       resolution_count: Resolution Count
       avg_reply_time: Avg reply time
+      no_reply_conversations_count: Conversations with no reply
     inbox_csv:
       inbox_name: Inbox name
       inbox_type: Inbox type

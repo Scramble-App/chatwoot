@@ -22,7 +22,8 @@ RSpec.describe V2::Reports::Conversations::MetricBuilder, type: :model do
           avg_first_response_time: 42,
           avg_resolution_time: 42,
           resolutions_count: 42,
-          reply_time: 42
+          reply_time: 42,
+          no_reply_conversations_count: 42
         }
       )
     end

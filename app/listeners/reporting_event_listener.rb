@@ -168,11 +168,6 @@ class ReportingEventListener < BaseListener
     )
   end
 
-  # A snapshot only records who was assigned when the assignment history started, not when they were assigned
-  def last_assigned_at(conversation, agent, time)
-    conversation.assignment_events.where(to_assignee_id: agent.id, occurred_at: ..time).where.not(event_type: 'snapshot').maximum(:occurred_at)
-  end
-
   def create_conversation_opened_event(conversation, time_since_resolved, business_hours_value, start_time, event_end_time)
     reporting_event = ReportingEvent.new(
       name: 'conversation_opened',

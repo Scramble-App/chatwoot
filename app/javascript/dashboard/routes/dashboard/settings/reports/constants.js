@@ -165,6 +165,7 @@ export const METRIC_CHART = {
   resolutions_count: DEFAULT_CHART,
   bot_resolutions_count: DEFAULT_CHART,
   bot_handoffs_count: DEFAULT_CHART,
+  no_reply_conversations_count: DEFAULT_CHART,
 };
 
 export const OVERVIEW_METRICS = {

@@ -52,6 +52,10 @@
         "NAME": "Reply time",
         "TOOLTIP_TEXT": "Reply time is {metricValue} (based on {conversationCount} replies)",
         "DESC": ""
+      },
+      "NO_REPLY_CONVERSATIONS": {
+        "NAME": "Conversations with no reply",
+        "DESC": "( Total )"
       }
     },
     "DATE_RANGE_OPTIONS": {
@@ -651,6 +655,7 @@
     "AVG_REPLY_TIME": "Avg. Customer Waiting Time",
     "AVG_AGENT_REPLY_TIME": "Avg. Reply Time",
     "RESOLUTION_COUNT": "Resolution Count",
+    "NO_REPLY_CONVERSATIONS": "Conversations with No Reply",
     "CONVERSATIONS": "No. of conversations"
   }
 }

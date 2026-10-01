@@ -81,7 +81,10 @@ export default {
         RESOLUTION_COUNT: 'resolutions_count',
         // Agents are timed from when the conversation was assigned to them, not from the customer's message
         ...(this.isAgentType
-          ? { AGENT_REPLY_TIME: 'reply_time' }
+          ? {
+              AGENT_REPLY_TIME: 'reply_time',
+              NO_REPLY_CONVERSATIONS: 'no_reply_conversations_count',
+            }
           : { REPLY_TIME: 'reply_time' }),
       };
     },

@@ -105,6 +105,20 @@ RSpec.describe Conversation do
         to_assignee_id: agent.id
       )
     end
+
+    it 'reports a conversation that leaves an agent while the customer waits for their reply' do
+      conversation.update!(assignee: agent, waiting_since: 10.minutes.ago)
+      next_agent = create(:user, account: account, role: :agent)
+
+      expect { conversation.update!(assignee: next_agent) }.to have_enqueued_job(ReportingEvents::HandoffWithoutReplyJob)
+    end
+
+    it 'does not report a conversation that leaves an agent after they replied' do
+      conversation.update!(assignee: agent, waiting_since: nil)
+      next_agent = create(:user, account: account, role: :agent)
+
+      expect { conversation.update!(assignee: next_agent) }.not_to have_enqueued_job(ReportingEvents::HandoffWithoutReplyJob)
+    end
   end
 
   describe '.validate jsonb attributes' do
