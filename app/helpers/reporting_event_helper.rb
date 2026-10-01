@@ -1,6 +1,6 @@
 module ReportingEventHelper
-  def business_hours(inbox, from, to)
-    ReportingEvents::BusinessTime.new(inbox).seconds_between(from, to)
+  def business_hours(inbox, from, to, user: nil)
+    ReportingEvents::BusinessTime.new(inbox, user: user).seconds_between(from, to)
   end
 
   def last_non_human_activity(conversation)

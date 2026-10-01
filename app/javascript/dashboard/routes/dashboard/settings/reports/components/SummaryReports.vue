@@ -93,7 +93,11 @@ const columns = computed(() => [
     cell: defaulSpanRender,
   }),
   columnHelper.accessor('avgReplyTime', {
-    header: t('SUMMARY_REPORTS.AVG_REPLY_TIME'),
+    // Agents are timed from when the conversation was assigned to them, not from the customer's message
+    header:
+      props.type === 'agent'
+        ? t('SUMMARY_REPORTS.AVG_AGENT_REPLY_TIME')
+        : t('SUMMARY_REPORTS.AVG_REPLY_TIME'),
     width: 200,
     cell: defaulSpanRender,
   }),

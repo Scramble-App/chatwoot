@@ -44,6 +44,7 @@ class ReportingEventListener < BaseListener
 
     reporting_event.save!
     safe_rollup(reporting_event)
+    create_agent_response_event('agent_first_response', message, start_time)
   end
 
   def reply_created(event)
@@ -69,6 +70,7 @@ class ReportingEventListener < BaseListener
     )
     reporting_event.save!
     safe_rollup(reporting_event)
+    create_agent_response_event('agent_reply_time', message, waiting_since)
   end
 
   def conversation_bot_handoff(event)
@@ -141,6 +143,34 @@ class ReportingEventListener < BaseListener
     return if first_customer_message_at.blank?
 
     [last_non_human_activity(conversation), first_customer_message_at].max
+  end
+
+  # Agent reports time a reply from when the conversation was assigned to the replying agent, when that was after the
+  # customer started waiting, so a customer left unanswered on the previous agent's shift is not counted against the
+  # agent who took the conversation over. Its business time is counted in the agent's own shifts.
+  def create_agent_response_event(name, message, waiting_since)
+    agent = message.sender
+    return unless agent.is_a?(User)
+
+    conversation = message.conversation
+    start_time = [waiting_since, last_assigned_at(conversation, agent, message.created_at)].compact.max
+
+    ReportingEvent.create!(
+      name: name,
+      value: message.created_at.to_i - start_time.to_i,
+      value_in_business_hours: business_hours(conversation.inbox, start_time, message.created_at, user: agent),
+      account_id: conversation.account_id,
+      inbox_id: conversation.inbox_id,
+      user_id: agent.id,
+      conversation_id: conversation.id,
+      event_start_time: start_time,
+      event_end_time: message.created_at
+    )
+  end
+
+  # A snapshot only records who was assigned when the assignment history started, not when they were assigned
+  def last_assigned_at(conversation, agent, time)
+    conversation.assignment_events.where(to_assignee_id: agent.id, occurred_at: ..time).where.not(event_type: 'snapshot').maximum(:occurred_at)
   end
 
   def create_conversation_opened_event(conversation, time_since_resolved, business_hours_value, start_time, event_end_time)

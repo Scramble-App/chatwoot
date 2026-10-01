@@ -149,6 +149,39 @@ describe ReportingEventListener do
       expect(event.value_in_business_hours).to eq 2.hours
     end
 
+    it 'times the replying agent from the reassignment and counts their business time in their own shifts' do
+      tallinn = ActiveSupport::TimeZone['Europe/Tallinn']
+      next_agent = create(:user, account: account)
+      [[user, 7, 14], [next_agent, 14, 22]].each do |agent, open_hour, close_hour|
+        create(:inbox_member, inbox: inbox, user: agent)
+        account_user = account.account_users.find_by(user: agent)
+        account_user.update!(schedule_enabled: true, schedule_timezone: 'Europe/Tallinn')
+        account_user.working_hours.create!(day_of_week: 1, open_hour: open_hour, close_hour: close_hour)
+      end
+      # The customer waits from Monday 13:00; the conversation moves to the next agent at 13:30, whose shift starts at 14:00
+      create(:conversation_assignment_event, conversation: conversation, from_assignee: user, to_assignee: next_agent,
+                                             event_type: 'reassigned', source: 'manual', occurred_at: tallinn.local(2026, 9, 28, 13, 30))
+      reply = create_agent_message(conversation, created_at: tallinn.local(2026, 9, 28, 14, 10), sender: next_agent)
+
+      listener.reply_created(create_reply_event(reply, tallinn.local(2026, 9, 28, 13)))
+
+      events = account.reporting_events.where(conversation_id: conversation.id)
+      expect(events.find_by(name: 'reply_time')).to have_attributes(value: 70.minutes, value_in_business_hours: 70.minutes, user_id: user.id)
+      expect(events.find_by(name: 'agent_reply_time')).to have_attributes(value: 40.minutes, value_in_business_hours: 10.minutes,
+                                                                          user_id: next_agent.id)
+    end
+
+    it 'records no agent reply time for a reply sent from outside, which has no agent' do
+      reply = create(:message, message_type: 'outgoing', account: account, inbox: inbox, conversation: conversation,
+                               content_attributes: { external_echo: true })
+      reply.update!(sender: nil)
+
+      listener.reply_created(create_reply_event(reply, 1.hour.ago))
+
+      expect(account.reporting_events.where(name: 'reply_time', conversation_id: conversation.id).count).to eq 1
+      expect(account.reporting_events.where(name: 'agent_reply_time', conversation_id: conversation.id)).to be_empty
+    end
+
     context 'when conversation is reopened' do
       let(:resolved_conversation) do
         create(:conversation, account: account, inbox: inbox, assignee: user,
@@ -307,6 +340,55 @@ describe ReportingEventListener do
       listener.first_reply_created(Events::Base.new('first.reply.created', reply.created_at, message: reply))
 
       expect(account.reporting_events.find_by(name: 'first_response', conversation_id: campaign_conversation.id).value).to be_within(1).of(3600)
+    end
+
+    context 'when the conversation was reassigned while the customer waited' do
+      let(:next_agent) { create(:user, account: account) }
+      # Assigned to the first agent two hours ago; the customer writes 65 minutes ago
+      let(:waiting_conversation) do
+        travel_to(2.hours.ago) { create(:conversation, account: account, inbox: inbox, assignee: user) }
+      end
+
+      before { create_customer_message(waiting_conversation, created_at: 65.minutes.ago) }
+
+      def reassign_to(agent, event_type: 'reassigned')
+        create(:conversation_assignment_event, conversation: waiting_conversation, from_assignee: user, to_assignee: agent,
+                                               event_type: event_type, source: 'shift_end', occurred_at: 5.minutes.ago)
+      end
+
+      def reply_from(agent)
+        reply = create(:message, message_type: 'outgoing', account: account, inbox: inbox, conversation: waiting_conversation,
+                                 sender: agent, created_at: Time.current)
+        listener.first_reply_created(Events::Base.new('first.reply.created', reply.created_at, message: reply))
+      end
+
+      def reporting_event(name)
+        account.reporting_events.find_by(name: name, conversation_id: waiting_conversation.id)
+      end
+
+      it 'times the customer from their message and the agent from the reassignment' do
+        reassign_to(next_agent)
+
+        reply_from(next_agent)
+
+        expect(reporting_event('first_response').value).to be_within(1).of(65.minutes)
+        expect(reporting_event('agent_first_response').value).to be_within(1).of(5.minutes)
+        expect(reporting_event('agent_first_response').user_id).to eq next_agent.id
+      end
+
+      it 'times an agent assigned before the customer wrote from the customer message' do
+        reply_from(user)
+
+        expect(reporting_event('agent_first_response').value).to be_within(1).of(65.minutes)
+      end
+
+      it 'ignores a snapshot, which does not tell when the agent was assigned' do
+        reassign_to(next_agent, event_type: 'snapshot')
+
+        reply_from(next_agent)
+
+        expect(reporting_event('agent_first_response').value).to be_within(1).of(65.minutes)
+      end
     end
   end
 

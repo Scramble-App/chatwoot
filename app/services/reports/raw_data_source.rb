@@ -124,9 +124,9 @@ class Reports::RawDataSource < Reports::DataSource
 
   def summary_select_field(definition)
     if definition.count?
-      "COUNT(CASE WHEN name = '#{definition.raw_event_name}' THEN 1 END) as #{definition.summary_key}"
+      "COUNT(CASE WHEN name = '#{event_name_for(definition)}' THEN 1 END) as #{definition.summary_key}"
     else
-      "AVG(CASE WHEN name = '#{definition.raw_event_name}' THEN #{average_value_key} END) as #{definition.summary_key}"
+      "AVG(CASE WHEN name = '#{event_name_for(definition)}' THEN #{average_value_key} END) as #{definition.summary_key}"
     end
   end
 

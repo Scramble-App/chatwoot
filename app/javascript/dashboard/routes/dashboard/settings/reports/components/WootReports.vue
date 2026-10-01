@@ -79,7 +79,10 @@ export default {
         FIRST_RESPONSE_TIME: 'avg_first_response_time',
         RESOLUTION_TIME: 'avg_resolution_time',
         RESOLUTION_COUNT: 'resolutions_count',
-        REPLY_TIME: 'reply_time',
+        // Agents are timed from when the conversation was assigned to them, not from the customer's message
+        ...(this.isAgentType
+          ? { AGENT_REPLY_TIME: 'reply_time' }
+          : { REPLY_TIME: 'reply_time' }),
       };
     },
   },

@@ -47,6 +47,11 @@
         "NAME": "Customer waiting time",
         "TOOLTIP_TEXT": "Waiting time is {metricValue} (based on {conversationCount} replies)",
         "DESC": ""
+      },
+      "AGENT_REPLY_TIME": {
+        "NAME": "Reply time",
+        "TOOLTIP_TEXT": "Reply time is {metricValue} (based on {conversationCount} replies)",
+        "DESC": ""
       }
     },
     "DATE_RANGE_OPTIONS": {
@@ -644,6 +649,7 @@
     "AVG_RESOLUTION_TIME": "Avg. Resolution Time",
     "AVG_FIRST_RESPONSE_TIME": "Avg. First Response Time",
     "AVG_REPLY_TIME": "Avg. Customer Waiting Time",
+    "AVG_AGENT_REPLY_TIME": "Avg. Reply Time",
     "RESOLUTION_COUNT": "Resolution Count",
     "CONVERSATIONS": "No. of conversations"
   }

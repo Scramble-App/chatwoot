@@ -1,6 +1,9 @@
 class Reports::DataSource
   include TimezoneHelper
 
+  # Agent reports time first responses and replies from when the conversation was assigned to the replying agent
+  AGENT_EVENT_NAMES = { first_response: :agent_first_response, reply_time: :agent_reply_time }.freeze
+
   attr_reader :account, :metric, :dimension_type, :dimension_id,
               :scope, :range, :group_by, :timezone_offset,
               :business_hours
@@ -43,7 +46,12 @@ class Reports::DataSource
   end
 
   def raw_event_name
-    report_metric&.raw_event_name
+    event_name_for(report_metric)
+  end
+
+  def event_name_for(definition)
+    event_name = definition&.raw_event_name
+    dimension_type == 'agent' ? AGENT_EVENT_NAMES.fetch(event_name, event_name) : event_name
   end
 
   def raw_count_strategy

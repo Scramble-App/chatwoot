@@ -81,6 +81,20 @@ RSpec.describe ReportingEvents::BusinessTime do
     expect(business_time.seconds_between(at(monday, 23), at(monday + 1, 7))).to eq 7.hours
   end
 
+  it "measures an agent's own reply in their own shifts" do
+    scheduled_agent(weekdays(7, 14))
+    evening_agent = scheduled_agent(weekdays(14, 22))
+
+    expect(described_class.new(inbox, user: evening_agent.user).seconds_between(at(monday, 13), at(monday, 15))).to eq 1.hour
+  end
+
+  it 'measures an agent without a schedule like the inbox' do
+    scheduled_agent(weekdays(7, 14))
+    agent = create(:user, account: account, role: :agent)
+
+    expect(described_class.new(inbox, user: agent).seconds_between(at(monday, 13), at(monday, 15))).to eq 1.hour
+  end
+
   it 'ignores agents whose schedule is off' do
     scheduled_agent(weekdays(7, 14), enabled: false)
 

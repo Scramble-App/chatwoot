@@ -34,7 +34,7 @@ RSpec.describe V2::Reports::AgentSummaryBuilder do
           account: account,
           conversation: c1,
           user: user1,
-          name: 'first_response',
+          name: 'agent_first_response',
           value: 20,
           value_in_business_hours: 10,
           created_at: Time.current
@@ -44,7 +44,7 @@ RSpec.describe V2::Reports::AgentSummaryBuilder do
           account: account,
           conversation: c1,
           user: user1,
-          name: 'reply_time',
+          name: 'agent_reply_time',
           value: 30,
           value_in_business_hours: 15,
           created_at: Time.current
@@ -54,11 +54,16 @@ RSpec.describe V2::Reports::AgentSummaryBuilder do
           account: account,
           conversation: c1,
           user: user1,
-          name: 'reply_time',
+          name: 'agent_reply_time',
           value: 40,
           value_in_business_hours: 25,
           created_at: Time.current
         )
+        # The customer waited longer, part of it before the conversation was assigned to the agent
+        create(:reporting_event, account: account, conversation: c1, user: user1, name: 'first_response',
+                                 value: 500, value_in_business_hours: 400, created_at: Time.current)
+        create(:reporting_event, account: account, conversation: c1, user: user1, name: 'reply_time',
+                                 value: 600, value_in_business_hours: 500, created_at: Time.current)
       end
 
       context 'when business hours is disabled' do

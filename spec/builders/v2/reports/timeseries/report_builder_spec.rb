@@ -188,6 +188,30 @@ describe V2::Reports::Timeseries::ReportBuilder do
         end
       end
 
+      context 'when the report is for an agent' do
+        let(:agent) { create(:user, account: account) }
+        let(:filter_type) { :agent }
+        let(:filter_id) { agent.id }
+
+        before do
+          # The customer waited 65 minutes, the last 5 of them after the conversation was assigned to the agent
+          create(:reporting_event, name: 'first_response', value: 3900, value_in_business_hours: 3900, account: account,
+                                   created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+          create(:reporting_event, name: 'agent_first_response', value: 300, value_in_business_hours: 300, account: account,
+                                   created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+        end
+
+        it 'times the agent from when the conversation was assigned to them' do
+          expect(subject.aggregate_value).to eq 300.0
+        end
+
+        it 'keeps timing the account from the customer message' do
+          account_builder = described_class.new(account, params.merge(type: :account, id: ''))
+
+          expect(account_builder.aggregate_value).to eq((80 + 100 + 93 + 3900) / 4.0)
+        end
+      end
+
       context 'when rollups are enabled and the agent does not exist' do
         let(:filter_type) { :agent }
         let(:filter_id) { '999999' }

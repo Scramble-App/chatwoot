@@ -2,11 +2,14 @@
 # following each agent's weekly hours and schedule exceptions (time off, extra shifts) the same way as
 # AccountUser#schedule_available_at?. An inbox without scheduled agents falls back to its business hours,
 # and to the whole span when those are off, so a business hours report never shows 0 for that inbox.
+# With a user, e.g. for how fast an agent replied, the span is measured in that agent's own shifts when they have a
+# schedule, and like the inbox's otherwise.
 class ReportingEvents::BusinessTime
   WEEK_DAYS = %i[sun mon tue wed thu fri sat].freeze
 
-  def initialize(inbox)
+  def initialize(inbox, user: nil)
     @inbox = inbox
+    @user = user
   end
 
   def seconds_between(from, to)
@@ -19,12 +22,18 @@ class ReportingEvents::BusinessTime
 
   private
 
-  attr_reader :inbox
+  attr_reader :inbox, :user
 
   def scheduled_agents
-    @scheduled_agents ||= inbox.account.account_users.joins(:user)
-                               .where(schedule_enabled: true, user_id: inbox.inbox_members.select(:user_id))
-                               .includes(:account, :working_hours, :schedule_exceptions).to_a
+    @scheduled_agents ||= own_schedule.presence || schedules.where(user_id: inbox.inbox_members.select(:user_id)).to_a
+  end
+
+  def own_schedule
+    user ? schedules.where(user_id: user.id).to_a : []
+  end
+
+  def schedules
+    inbox.account.account_users.joins(:user).where(schedule_enabled: true).includes(:account, :working_hours, :schedule_exceptions)
   end
 
   # The span is cut at every shift and exception edge, so each piece is either fully on shift or fully off
