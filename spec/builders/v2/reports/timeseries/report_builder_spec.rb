@@ -217,6 +217,15 @@ describe V2::Reports::Timeseries::ReportBuilder do
 
           expect(account_builder.aggregate_value).to eq((80 + 100 + 93 + 3900) / 4.0)
         end
+
+        it 'counts each conversation the agent left without a reply once' do
+          2.times do
+            create(:reporting_event, name: 'agent_handoff_without_reply', value: 600, value_in_business_hours: 600, account: account,
+                                     created_at: Time.zone.now, conversation: conversation, inbox: inbox, user: agent)
+          end
+
+          expect(described_class.new(account, params.merge(metric: 'no_reply_conversations_count')).aggregate_value).to eq 1
+        end
       end
 
       context 'when rollups are enabled and the agent does not exist' do

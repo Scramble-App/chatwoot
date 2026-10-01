@@ -265,6 +265,19 @@ RSpec.describe 'Reports API', type: :request do
 
         expect(response).to have_http_status(:success)
       end
+
+      it 'lists the conversations each agent left without a reply' do
+        create(:reporting_event, account: account, inbox: inbox, conversation: account.conversations.first, user: user,
+                                 name: 'agent_handoff_without_reply', value: 600, value_in_business_hours: 600, created_at: 1.hour.ago)
+
+        get "/api/v2/accounts/#{account.id}/reports/agents.csv",
+            params: params,
+            headers: admin.create_new_auth_token
+
+        rows = CSV.parse(response.body)
+        column = rows.find { |row| row.first == 'Agent name' }.index('Conversations with no reply')
+        expect(rows.find { |row| row.first == user.name }[column]).to eq('1')
+      end
     end
 
     context 'when an agent has access to multiple accounts' do

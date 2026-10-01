@@ -123,10 +123,12 @@ class Reports::RawDataSource < Reports::DataSource
   end
 
   def summary_select_field(definition)
+    matching = "CASE WHEN name = '#{event_name_for(definition)}' THEN"
     if definition.count?
-      "COUNT(CASE WHEN name = '#{event_name_for(definition)}' THEN 1 END) as #{definition.summary_key}"
+      counted = definition.raw_count_strategy == :distinct_conversation ? "DISTINCT #{matching} conversation_id END" : "#{matching} 1 END"
+      "COUNT(#{counted}) as #{definition.summary_key}"
     else
-      "AVG(CASE WHEN name = '#{event_name_for(definition)}' THEN #{average_value_key} END) as #{definition.summary_key}"
+      "AVG(#{matching} #{average_value_key} END) as #{definition.summary_key}"
     end
   end
 

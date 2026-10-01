@@ -59,8 +59,11 @@ RSpec.describe V2::Reports::AgentSummaryBuilder do
           value_in_business_hours: 25,
           created_at: Time.current
         )
-        create(:reporting_event, account: account, conversation: c1, user: user1, name: 'agent_handoff_without_reply',
-                                 value: 900, value_in_business_hours: 600, created_at: Time.current)
+        # The same conversation left the agent twice without a reply, which counts as one conversation
+        2.times do
+          create(:reporting_event, account: account, conversation: c1, user: user1, name: 'agent_handoff_without_reply',
+                                   value: 900, value_in_business_hours: 600, created_at: Time.current)
+        end
         # The customer waited longer, part of it before the conversation was assigned to the agent
         create(:reporting_event, account: account, conversation: c1, user: user1, name: 'first_response',
                                  value: 500, value_in_business_hours: 400, created_at: Time.current)

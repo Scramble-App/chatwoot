@@ -94,7 +94,8 @@ module Reports::ReportMetricRegistry # rubocop:disable Metrics/ModuleLength
       name: :no_reply_conversations_count,
       aggregate: :count,
       raw_event_name: :agent_handoff_without_reply,
-      summary_key: :no_reply_conversations_count
+      summary_key: :no_reply_conversations_count,
+      raw_count_strategy: :distinct_conversation
     )
   }.freeze
 
