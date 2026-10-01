@@ -132,6 +132,23 @@ describe ReportingEventListener do
       expect(events.first.value).to be_within(1).of(7200)
     end
 
+    it 'counts the business time from the shifts of the inbox agents' do
+      tallinn = ActiveSupport::TimeZone['Europe/Tallinn']
+      create(:inbox_member, inbox: inbox, user: user)
+      account_user = account.account_users.find_by(user: user)
+      account_user.update!(schedule_enabled: true, schedule_timezone: 'Europe/Tallinn')
+      account_user.working_hours.create!(day_of_week: 1, open_hour: 14, close_hour: 22)
+      account_user.working_hours.create!(day_of_week: 2, open_hour: 7, close_hour: 14)
+      # A customer writes on Monday at 21:00 and gets the reply on Tuesday at 08:00
+      reply = create_agent_message(conversation, created_at: tallinn.local(2026, 9, 29, 8))
+
+      listener.reply_created(create_reply_event(reply, tallinn.local(2026, 9, 28, 21)))
+
+      event = account.reporting_events.find_by(name: 'reply_time', conversation_id: conversation.id)
+      expect(event.value).to eq 11.hours
+      expect(event.value_in_business_hours).to eq 2.hours
+    end
+
     context 'when conversation is reopened' do
       let(:resolved_conversation) do
         create(:conversation, account: account, inbox: inbox, assignee: user,

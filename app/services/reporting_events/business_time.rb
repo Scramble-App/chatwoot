@@ -1,0 +1,87 @@
+# Business time of a span for an inbox's reports: the part of it when at least one inbox agent was on shift,
+# following each agent's weekly hours and schedule exceptions (time off, extra shifts) the same way as
+# AccountUser#schedule_available_at?. An inbox without scheduled agents falls back to its business hours,
+# and to the whole span when those are off, so a business hours report never shows 0 for that inbox.
+class ReportingEvents::BusinessTime
+  WEEK_DAYS = %i[sun mon tue wed thu fri sat].freeze
+
+  def initialize(inbox)
+    @inbox = inbox
+  end
+
+  def seconds_between(from, to)
+    return 0 if from.blank? || to.blank? || to <= from
+    return shift_seconds(from, to) if scheduled_agents.any?
+    return inbox_hours_seconds(from, to) if inbox.working_hours_enabled?
+
+    (to - from).round
+  end
+
+  private
+
+  attr_reader :inbox
+
+  def scheduled_agents
+    @scheduled_agents ||= inbox.account.account_users.joins(:user)
+                               .where(schedule_enabled: true, user_id: inbox.inbox_members.select(:user_id))
+                               .includes(:account, :working_hours, :schedule_exceptions).to_a
+  end
+
+  # The span is cut at every shift and exception edge, so each piece is either fully on shift or fully off
+  def shift_seconds(from, to)
+    shifts = scheduled_agents.index_with { |agent| weekly_shifts(agent, from, to) }
+    points = (shifts.flat_map { |agent, agent_shifts| edges(agent, agent_shifts) }.select { |edge| edge > from && edge < to } + [from, to]).uniq.sort
+
+    points.each_cons(2).sum do |start, finish|
+      shifts.any? { |agent, agent_shifts| available_at?(agent, agent_shifts, start) } ? finish - start : 0
+    end.round
+  end
+
+  def edges(agent, shifts)
+    shifts.flatten + agent.schedule_exceptions.flat_map { |exception| [exception.starts_at, exception.ends_at] }
+  end
+
+  def available_at?(agent, shifts, time)
+    exception = agent.schedule_exceptions.select { |item| item.starts_at <= time && item.ends_at > time }.max_by(&:starts_at)
+    return exception.available? if exception
+
+    shifts.any? { |start, finish| start <= time && time < finish }
+  end
+
+  # [start, finish) of every weekly shift that touches the span, in the agent's schedule timezone
+  def weekly_shifts(agent, from, to)
+    zone = ActiveSupport::TimeZone[agent.schedule_time_zone]
+    days = (from.in_time_zone(zone).to_date - 1.day)..to.in_time_zone(zone).to_date
+
+    days.flat_map do |day|
+      agent.working_hours.select { |hour| hour.day_of_week == day.wday }.map { |hour| shift_on(zone, day, hour) }
+    end
+  end
+
+  # A shift that does not close after it opens runs overnight, as in AccountUserWorkingHour#open_at?
+  def shift_on(zone, day, hour)
+    overnight = (hour.close_hour * 60) + hour.close_minutes <= (hour.open_hour * 60) + hour.open_minutes
+    close_day = overnight ? day + 1.day : day
+
+    [local_time(zone, day, hour.open_hour, hour.open_minutes), local_time(zone, close_day, hour.close_hour, hour.close_minutes)]
+  end
+
+  def local_time(zone, day, hour, minute)
+    zone.local(day.year, day.month, day.day, hour, minute)
+  end
+
+  def inbox_hours_seconds(from, to)
+    working_hours = inbox.working_hours.reject(&:closed_all_day?).to_h do |hour|
+      [WEEK_DAYS[hour.day_of_week], { format_time(hour.open_hour, hour.open_minutes) => format_time(hour.close_hour, hour.close_minutes) }]
+    end
+    return 0 if working_hours.blank?
+
+    WorkingHours::Config.with_config(working_hours: working_hours, time_zone: inbox.timezone) do
+      from.in_time_zone(inbox.timezone).to_time.working_time_until(to.in_time_zone(inbox.timezone).to_time)
+    end
+  end
+
+  def format_time(hour, minute)
+    format('%<hour>02d:%<minute>02d', hour: hour, minute: minute)
+  end
+end
