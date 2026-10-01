@@ -7,6 +7,7 @@ import { useAlert, useTrack } from 'dashboard/composables';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import wootConstants from 'dashboard/constants/globals';
 import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
+import { savedInboxFilter } from './helpers/InboxViewHelpers';
 
 import InboxCard from 'dashboard/components-next/Inbox/InboxCard.vue';
 import InboxListHeader from './components/InboxListHeader.vue';
@@ -157,8 +158,11 @@ const onFilterChange = option => {
 };
 
 const setSavedFilter = () => {
-  const { inbox_filter_by: filterBy = {} } = uiSettings.value;
-  const { status: savedStatus, type: savedType, sort_by: sortBy } = filterBy;
+  const {
+    status: savedStatus,
+    type: savedType,
+    sort_by: sortBy,
+  } = savedInboxFilter(uiSettings.value);
   status.value = savedStatus;
   type.value = savedType;
   sortOrder.value = sortBy || wootConstants.INBOX_SORT_BY.NEWEST;
