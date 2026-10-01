@@ -82,7 +82,7 @@ const showGroupByDropdown = ref(false);
 const activeFilterType = ref('');
 const customDateRange = ref([subDays(new Date(), 6), new Date()]);
 const selectedDateRange = ref(DATE_RANGE_TYPES.LAST_7_DAYS);
-const businessHoursSelected = ref(false);
+const businessHoursSelected = ref(true);
 const groupBy = ref(GROUP_BY_FILTER[1]);
 const groupByfilterItemsList = ref([{ id: 1, name: 'Day' }]);
 
@@ -303,7 +303,7 @@ const initializeFromURL = () => {
     ];
   }
 
-  if (urlParams.businessHours) {
+  if (urlParams.businessHours !== null) {
     businessHoursSelected.value = urlParams.businessHours;
   }
 

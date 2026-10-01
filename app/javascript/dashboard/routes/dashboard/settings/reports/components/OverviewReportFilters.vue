@@ -31,7 +31,7 @@ const reportTimezone = useReportTimezone();
 
 const customDateRange = ref([subDays(new Date(), 6), new Date()]);
 const selectedDateRange = ref(DATE_RANGE_TYPES.LAST_7_DAYS);
-const businessHoursSelected = ref(false);
+const businessHoursSelected = ref(true);
 
 const updateURLParams = () => {
   const params = generateReportURLParams({
@@ -80,7 +80,7 @@ const initializeFromURL = () => {
     ];
   }
 
-  if (urlParams.businessHours) {
+  if (urlParams.businessHours !== null) {
     businessHoursSelected.value = urlParams.businessHours;
   }
 };

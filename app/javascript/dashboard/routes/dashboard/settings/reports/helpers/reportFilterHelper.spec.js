@@ -34,7 +34,7 @@ describe('reportFilterHelper', () => {
       });
     });
 
-    it('excludes business hours when false', () => {
+    it('keeps business hours turned off, since they are on by default', () => {
       const params = generateReportURLParams({
         from: 1738607400,
         to: 1770229799,
@@ -44,6 +44,7 @@ describe('reportFilterHelper', () => {
       expect(params).toEqual({
         from: 1738607400,
         to: 1770229799,
+        business_hours: 'false',
       });
     });
 
@@ -104,7 +105,7 @@ describe('reportFilterHelper', () => {
       expect(result).toEqual({
         from: 1738607400,
         to: 1770229799,
-        businessHours: false,
+        businessHours: null,
         groupBy: null,
         range: null,
       });
@@ -156,7 +157,7 @@ describe('reportFilterHelper', () => {
       expect(result).toEqual({
         from: null,
         to: null,
-        businessHours: false,
+        businessHours: null,
         groupBy: null,
         range: null,
       });
@@ -211,6 +212,12 @@ describe('reportFilterHelper', () => {
       expect(parsed.businessHours).toBe(original.businessHours);
       expect(parsed.groupBy).toBe(original.groupBy);
       expect(parsed.range).toBe(original.range);
+    });
+
+    it('keeps business hours turned off through generate and parse', () => {
+      const urlParams = generateReportURLParams({ businessHours: false });
+
+      expect(parseReportURLParams(urlParams).businessHours).toBe(false);
     });
   });
 
