@@ -109,6 +109,12 @@ describe V2::Reports::Timeseries::ReportBuilder do
             ]
           )
         end
+
+        it 'keeps the viewer offset for a Rails timezone name, which the dashboard cannot use' do
+          account.update!(reporting_timezone: 'Tallinn')
+
+          expect(subject.timeseries.pluck(:timestamp).last).to eq current_time.in_time_zone('Chennai').beginning_of_week(:sunday).to_i
+        end
       end
 
       context 'when timezone offset is provided' do

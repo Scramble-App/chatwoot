@@ -1,8 +1,9 @@
 module TimezoneHelper
-  # Reports use the account's reporting timezone when it is set, so every viewer sees the same days and hours
+  # Reports use the account's reporting timezone when it is set, so every viewer sees the same days and hours.
+  # Only an IANA timezone counts, since the dashboard works with those; a Rails name such as "Tallinn" is ignored on both sides.
   def account_report_timezone(account)
     timezone = account&.reporting_timezone
-    timezone if timezone.present? && ActiveSupport::TimeZone[timezone].present?
+    timezone if timezone.present? && TZInfo::Timezone.all_identifiers.include?(timezone)
   end
 
   def timezone_name_from_params(timezone, offset)
