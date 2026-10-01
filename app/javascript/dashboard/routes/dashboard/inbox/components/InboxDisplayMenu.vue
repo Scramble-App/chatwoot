@@ -1,6 +1,7 @@
 <script>
 import wootConstants from 'dashboard/constants/globals';
 import { useUISettings } from 'dashboard/composables/useUISettings';
+import { savedInboxFilter } from '../helpers/InboxViewHelpers';
 
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
@@ -96,8 +97,11 @@ export default {
       });
     },
     setSavedFilter() {
-      const { inbox_filter_by: filterBy = {} } = this.uiSettings;
-      const { status, type, sort_by: sortBy } = filterBy;
+      const {
+        status,
+        type,
+        sort_by: sortBy,
+      } = savedInboxFilter(this.uiSettings);
       this.activeSort = sortBy || wootConstants.INBOX_SORT_BY.NEWEST;
       this.displayOptions.forEach(option => {
         option.selected =

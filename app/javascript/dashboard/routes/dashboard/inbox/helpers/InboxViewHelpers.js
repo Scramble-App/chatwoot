@@ -1,3 +1,15 @@
+import wootConstants from 'dashboard/constants/globals';
+
+// Snoozed and read notifications are shown until the agent changes the display options
+export const DEFAULT_INBOX_FILTER = {
+  status: wootConstants.INBOX_DISPLAY_BY.SNOOZED,
+  type: wootConstants.INBOX_DISPLAY_BY.READ,
+  sort_by: wootConstants.INBOX_SORT_BY.NEWEST,
+};
+
+export const savedInboxFilter = uiSettings =>
+  uiSettings?.inbox_filter_by || DEFAULT_INBOX_FILTER;
+
 export const NOTIFICATION_TYPES_MAPPING = {
   CONVERSATION_MENTION: ['i-lucide-at-sign', 'text-n-blue-11'],
   CONVERSATION_ASSIGNMENT: ['i-lucide-chevrons-right', 'text-n-blue-11'],
