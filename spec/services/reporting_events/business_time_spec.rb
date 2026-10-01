@@ -81,6 +81,27 @@ RSpec.describe ReportingEvents::BusinessTime do
     expect(business_time.seconds_between(at(monday, 23), at(monday + 1, 7))).to eq 7.hours
   end
 
+  it 'runs a shift that closes at midnight until the end of the day' do
+    scheduled_agent({ 1 => [18, 0] })
+
+    expect(business_time.seconds_between(at(monday, 17), at(monday + 1, 1))).to eq 6.hours
+  end
+
+  it 'counts a shift on the day the clocks go back by its real length' do
+    # Tallinn leaves summer time on Sunday 25 October 2026 at 04:00, so 00:00 to 06:00 lasts 7 hours
+    scheduled_agent({ 0 => [0, 6] })
+
+    expect(business_time.seconds_between(at(monday + 26, 23), at(monday + 27, 7))).to eq 7.hours
+  end
+
+  it 'follows the exception that started last when exceptions overlap' do
+    agent = scheduled_agent(weekdays(7, 14))
+    agent.schedule_exceptions.create!(starts_at: at(monday, 0), ends_at: at(monday + 1, 0), available: false)
+    agent.schedule_exceptions.create!(starts_at: at(monday, 10), ends_at: at(monday, 12), available: true)
+
+    expect(business_time.seconds_between(at(monday, 7), at(monday, 14))).to eq 2.hours
+  end
+
   it "measures an agent's own reply in their own shifts" do
     scheduled_agent(weekdays(7, 14))
     evening_agent = scheduled_agent(weekdays(14, 22))
