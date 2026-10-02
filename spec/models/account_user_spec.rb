@@ -28,6 +28,17 @@ RSpec.describe AccountUser do
     end
   end
 
+  describe 'destroying an account user' do
+    it 'removes their schedule instead of tripping its foreign keys' do
+      create(:account_user_working_hour, account_user: account_user, day_of_week: 1, open_hour: 9, close_hour: 18)
+      create(:account_user_special_day, account_user: account_user, date: Date.new(2026, 6, 1))
+
+      expect { account_user.destroy! }.not_to raise_error
+      expect(AccountUserWorkingHour.where(account_user_id: account_user.id)).to be_empty
+      expect(AccountUserSpecialDay.where(account_user_id: account_user.id)).to be_empty
+    end
+  end
+
   describe 'schedule availability' do
     before do
       account_user.update!(schedule_enabled: true, schedule_timezone: 'UTC')
@@ -57,18 +68,66 @@ RSpec.describe AccountUser do
       end
     end
 
-    it 'lets exceptions override weekly intervals' do
-      create(:account_user_working_hour, account_user: account_user, day_of_week: 1, open_hour: 9, close_hour: 18)
-      create(
-        :account_user_schedule_exception,
-        account_user: account_user,
-        starts_at: Time.zone.parse('2026-06-01 09:00:00 UTC'),
-        ends_at: Time.zone.parse('2026-06-01 12:00:00 UTC'),
-        available: false
-      )
+    context 'with a special day' do
+      # Monday, 1 June 2026, with weekly hours from 14:00 to 22:00
+      let(:monday) { Date.new(2026, 6, 1) }
 
-      travel_to Time.zone.parse('2026-06-01 10:00:00 UTC') do
-        expect(account_user.availability_status).to eq('offline')
+      before { create(:account_user_working_hour, account_user: account_user, day_of_week: 1, open_hour: 14, close_hour: 22) }
+
+      def available_at?(time)
+        account_user.reload.schedule_available_at?(Time.zone.parse("#{time} UTC"))
+      end
+
+      it 'takes the day off instead of the weekly hours' do
+        create(:account_user_special_day, account_user: account_user, date: monday, day_off: true, open_hour: nil, close_hour: nil)
+
+        expect(available_at?('2026-06-01 15:00')).to be(false)
+      end
+
+      it 'works only the special hours on that date' do
+        create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 10, close_hour: 18)
+
+        expect([available_at?('2026-06-01 11:00'), available_at?('2026-06-01 20:00')]).to eq([true, false])
+      end
+
+      it 'takes the day off even when the date also has special hours' do
+        create(:account_user_special_day, account_user: account_user, date: monday, day_off: true, open_hour: nil, close_hour: nil)
+        create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 10, close_hour: 18)
+
+        expect(available_at?('2026-06-01 11:00')).to be(false)
+      end
+
+      it 'goes back to the weekly hours on other dates' do
+        create(:account_user_special_day, account_user: account_user, date: monday, day_off: true, open_hour: nil, close_hour: nil)
+
+        expect(available_at?('2026-06-08 15:00')).to be(true)
+      end
+
+      it 'runs special hours that close before they open into the next morning' do
+        create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 20, close_hour: 2)
+
+        expect(available_at?('2026-06-02 01:00')).to be(true)
+      end
+
+      it 'takes the date in the schedule timezone' do
+        account_user.update!(schedule_timezone: 'Europe/Tallinn')
+        create(:account_user_special_day, account_user: account_user, date: monday + 1, open_hour: 0, close_hour: 3)
+
+        # 22:30 UTC on Monday is 01:30 on Tuesday in Tallinn
+        expect(available_at?('2026-06-01 22:30')).to be(true)
+      end
+    end
+  end
+
+  describe '#upcoming_special_days' do
+    it 'leaves out dates that have passed in the schedule timezone' do
+      account_user.update!(schedule_timezone: 'Europe/Tallinn')
+      today = create(:account_user_special_day, account_user: account_user, date: Date.new(2026, 6, 2))
+      create(:account_user_special_day, account_user: account_user, date: Date.new(2026, 6, 1))
+
+      # 23:30 UTC on 1 June is already 2 June in Tallinn
+      travel_to Time.zone.parse('2026-06-01 23:30:00 UTC') do
+        expect(account_user.reload.upcoming_special_days).to eq([today])
       end
     end
   end

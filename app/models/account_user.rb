@@ -35,15 +35,16 @@ class AccountUser < ApplicationRecord
   belongs_to :account
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
-  has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :destroy_async
-  has_many :schedule_exceptions, class_name: 'AccountUserScheduleException', dependent: :destroy_async
+  # Deleted inline: destroy_async would delete them after the account user, and their foreign keys block that.
+  # delete_all rather than destroy because they have no destroy callbacks.
+  has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :delete_all
+  has_many :special_days, class_name: 'AccountUserSpecialDay', dependent: :delete_all
 
   enum role: { agent: 0, administrator: 1 }
   enum availability: { online: 0, offline: 1, busy: 2 }
 
   accepts_nested_attributes_for :account
   accepts_nested_attributes_for :working_hours, allow_destroy: true
-  accepts_nested_attributes_for :schedule_exceptions, allow_destroy: true
 
   after_create_commit :notify_creation, :create_notification_setting
   after_destroy :notify_deletion, :remove_user_from_account
@@ -66,10 +67,32 @@ class AccountUser < ApplicationRecord
   end
 
   def schedule_available_at?(time = Time.current)
-    active_exception = schedule_exceptions.active_at(time).order(starts_at: :desc).first
-    return active_exception.available? if active_exception.present?
+    local_date = time.in_time_zone(schedule_time_zone).to_date
+    # A shift of the day before can still run overnight
+    [local_date - 1.day, local_date].any? do |date|
+      schedule_shifts_on(date).any? { |start, finish| start <= time && time < finish }
+    end
+  end
 
-    working_hours.any? { |working_hour| working_hour.open_at?(time) }
+  # [start, finish) of the shifts of a date in the schedule timezone: its special schedule if it has one, otherwise its
+  # weekly hours. A day off wins over special hours on the same date.
+  def schedule_shifts_on(date)
+    special = special_days.select { |special_day| special_day.date == date }
+    return [] if special.any?(&:day_off?)
+
+    hours = special.presence || working_hours.select { |working_hour| working_hour.day_of_week == date.wday }
+    zone = ActiveSupport::TimeZone[schedule_time_zone]
+    hours.map { |hour| hour.shift_on(date, zone) }
+  end
+
+  def schedule_today
+    Time.current.in_time_zone(schedule_time_zone).to_date
+  end
+
+  # Special days from today on in the schedule timezone, since past ones no longer apply
+  def upcoming_special_days
+    today = schedule_today
+    special_days.select { |special_day| special_day.date >= today }.sort_by { |special_day| [special_day.date, special_day.open_hour.to_i] }
   end
 
   def create_notification_setting

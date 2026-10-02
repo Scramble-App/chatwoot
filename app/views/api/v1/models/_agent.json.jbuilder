@@ -23,13 +23,14 @@ json.working_hours do
     json.close_minutes working_hour.close_minutes
   end
 end
-json.schedule_exceptions do
-  json.array! resource.current_account_user&.schedule_exceptions || [] do |schedule_exception|
-    json.id schedule_exception.id
-    json.starts_at schedule_exception.starts_at
-    json.ends_at schedule_exception.ends_at
-    json.available schedule_exception.available
-    json.name schedule_exception.name
+json.special_days do
+  json.array! resource.current_account_user&.upcoming_special_days || [] do |special_day|
+    json.date special_day.date
+    json.day_off special_day.day_off
+    json.open_hour special_day.open_hour
+    json.open_minutes special_day.open_minutes
+    json.close_hour special_day.close_hour
+    json.close_minutes special_day.close_minutes
   end
 end
 json.thumbnail resource.avatar_url

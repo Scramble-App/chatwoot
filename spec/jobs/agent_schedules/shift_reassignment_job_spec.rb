@@ -28,8 +28,8 @@ RSpec.describe AgentSchedules::ShiftReassignmentJob, type: :job do
   def put_on_shift(user)
     on_shift_account_user = user.account_users.find_by!(account_id: account.id)
     on_shift_account_user.update!(schedule_enabled: true, schedule_timezone: 'UTC')
-    create(:account_user_schedule_exception, account_user: on_shift_account_user, available: true,
-                                             starts_at: 1.hour.ago, ends_at: 1.hour.from_now)
+    # On shift around the clock, whenever the example runs
+    (0..6).each { |day| create(:account_user_working_hour, account_user: on_shift_account_user, day_of_week: day, open_hour: 0, close_hour: 0) }
     create(:inbox_member, inbox: inbox, user: user)
     create(:team_member, team: team, user: user)
   end
@@ -139,6 +139,20 @@ RSpec.describe AgentSchedules::ShiftReassignmentJob, type: :job do
       described_class.perform_now
 
       expect(conversation.reload.assignee_id).to eq(agent.id)
+    end
+  end
+
+  context 'when the agent has a special day off' do
+    before { put_on_shift(on_shift_agent) }
+
+    it 'hands their conversations over even during their weekly hours' do
+      create(:account_user_working_hour, account_user: account_user, day_of_week: Time.current.wday, open_hour: 0, close_hour: 0)
+      create(:account_user_special_day, account_user: account_user, date: Time.current.to_date, day_off: true, open_hour: nil, close_hour: nil)
+      conversation = create(:conversation, account: account, inbox: inbox, team: team, assignee: agent)
+
+      described_class.perform_now
+
+      expect(conversation.reload.assignee_id).to eq(on_shift_agent.id)
     end
   end
 
