@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
+import { formatInTimeZone } from 'date-fns-tz';
 import { required, minLength } from '@vuelidate/validators';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
@@ -59,6 +60,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  specialDays: {
+    type: Array,
+    default: () => [],
+  },
   scheduleExceptions: {
     type: Array,
     default: () => [],
@@ -110,6 +115,26 @@ const workingHours = ref(
     open_time: formatTime(workingHour.open_hour, workingHour.open_minutes),
     close_time: formatTime(workingHour.close_hour, workingHour.close_minutes),
   }))
+);
+const specialDays = ref(
+  props.specialDays.map(specialDay => ({
+    date: specialDay.date,
+    day_off: !!specialDay.day_off,
+    open_time: specialDay.day_off
+      ? formatTime()
+      : formatTime(specialDay.open_hour, specialDay.open_minutes),
+    close_time: specialDay.day_off
+      ? formatTime(18)
+      : formatTime(specialDay.close_hour, specialDay.close_minutes),
+  }))
+);
+// Special days are dates of the agent's schedule timezone, and past ones no longer apply
+const specialDayMinDate = computed(() =>
+  formatInTimeZone(
+    new Date(),
+    scheduleTimezone.value || DEFAULT_AGENT_SCHEDULE_TIMEZONE,
+    'yyyy-MM-dd'
+  )
 );
 const scheduleExceptions = ref(
   props.scheduleExceptions.map(scheduleException => ({
@@ -219,6 +244,24 @@ function removeWorkingHour(index) {
   );
 }
 
+function addSpecialDay() {
+  specialDays.value = [
+    ...specialDays.value,
+    {
+      date: specialDayMinDate.value,
+      day_off: false,
+      open_time: '09:00',
+      close_time: '18:00',
+    },
+  ];
+}
+
+function removeSpecialDay(index) {
+  specialDays.value = specialDays.value.filter(
+    (_, itemIndex) => itemIndex !== index
+  );
+}
+
 function addScheduleException() {
   scheduleExceptions.value = [
     ...scheduleExceptions.value,
@@ -244,6 +287,25 @@ function normalizedWorkingHours() {
       close_minutes: closeTime.minutes,
     };
   });
+}
+
+function normalizedSpecialDays() {
+  return specialDays.value
+    .filter(specialDay => specialDay.date)
+    .map(specialDay => {
+      if (specialDay.day_off) return { date: specialDay.date, day_off: true };
+
+      const openTime = parseTime(specialDay.open_time);
+      const closeTime = parseTime(specialDay.close_time);
+      return {
+        date: specialDay.date,
+        day_off: false,
+        open_hour: openTime.hour,
+        open_minutes: openTime.minutes,
+        close_hour: closeTime.hour,
+        close_minutes: closeTime.minutes,
+      };
+    });
 }
 
 function normalizedScheduleExceptions() {
@@ -274,6 +336,7 @@ const editAgent = async () => {
       schedule_timezone:
         scheduleTimezone.value || DEFAULT_AGENT_SCHEDULE_TIMEZONE,
       working_hours: normalizedWorkingHours(),
+      special_days: normalizedSpecialDays(),
       schedule_exceptions: normalizedScheduleExceptions(),
     };
 
@@ -403,7 +466,7 @@ const resetPassword = async () => {
           :key="`working-hour-${index}`"
           class="grid grid-cols-12 gap-2 items-end"
         >
-          <label class="col-span-4">
+          <label class="col-span-12 sm:col-span-4">
             {{ $t('AGENT_MGMT.SCHEDULE.DAY') }}
             <select v-model="workingHour.day_of_week">
               <option
@@ -415,15 +478,15 @@ const resetPassword = async () => {
               </option>
             </select>
           </label>
-          <label class="col-span-3">
+          <label class="col-span-6 sm:col-span-3">
             {{ $t('AGENT_MGMT.SCHEDULE.START') }}
             <input v-model="workingHour.open_time" type="time" />
           </label>
-          <label class="col-span-3">
+          <label class="col-span-6 sm:col-span-3">
             {{ $t('AGENT_MGMT.SCHEDULE.END') }}
             <input v-model="workingHour.close_time" type="time" />
           </label>
-          <div class="col-span-2 pb-1">
+          <div class="col-span-12 sm:col-span-2 pb-1">
             <Button
               ghost
               type="button"
@@ -432,6 +495,65 @@ const resetPassword = async () => {
               @click.prevent="removeWorkingHour(index)"
             />
           </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <h3 class="text-heading-3 text-n-slate-12 mb-0">
+            {{ $t('AGENT_MGMT.SCHEDULE.SPECIAL_DAYS') }}
+          </h3>
+          <Button
+            ghost
+            type="button"
+            icon="i-lucide-plus"
+            :label="$t('AGENT_MGMT.SCHEDULE.ADD_SPECIAL_DAY')"
+            data-test-id="agent-special-day-add"
+            @click.prevent="addSpecialDay"
+          />
+        </div>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AGENT_MGMT.SCHEDULE.SPECIAL_DAYS_NOTE') }}
+        </p>
+
+        <div
+          v-for="(specialDay, index) in specialDays"
+          :key="`special-day-${index}`"
+          class="flex flex-col gap-1"
+          data-test-id="agent-special-day"
+        >
+          <div class="grid grid-cols-12 gap-2 items-end">
+            <label class="col-span-12 sm:col-span-4">
+              {{ $t('AGENT_MGMT.SCHEDULE.DATE') }}
+              <input
+                v-model="specialDay.date"
+                type="date"
+                :min="specialDayMinDate"
+                required
+              />
+            </label>
+            <template v-if="!specialDay.day_off">
+              <label class="col-span-6 sm:col-span-3">
+                {{ $t('AGENT_MGMT.SCHEDULE.START') }}
+                <input v-model="specialDay.open_time" type="time" required />
+              </label>
+              <label class="col-span-6 sm:col-span-3">
+                {{ $t('AGENT_MGMT.SCHEDULE.END') }}
+                <input v-model="specialDay.close_time" type="time" required />
+              </label>
+            </template>
+            <div class="col-span-12 sm:col-span-2 sm:col-start-11 pb-1">
+              <Button
+                ghost
+                type="button"
+                icon="i-lucide-trash"
+                :label="$t('AGENT_MGMT.SCHEDULE.REMOVE')"
+                @click.prevent="removeSpecialDay(index)"
+              />
+            </div>
+          </div>
+          <label class="flex items-center gap-2">
+            <input v-model="specialDay.day_off" type="checkbox" />
+            {{ $t('AGENT_MGMT.SCHEDULE.DAY_OFF') }}
+          </label>
         </div>
 
         <div class="flex items-center justify-between">

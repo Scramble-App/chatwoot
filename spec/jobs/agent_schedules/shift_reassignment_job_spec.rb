@@ -142,6 +142,20 @@ RSpec.describe AgentSchedules::ShiftReassignmentJob, type: :job do
     end
   end
 
+  context 'when the agent has a special day off' do
+    before { put_on_shift(on_shift_agent) }
+
+    it 'hands their conversations over even during their weekly hours' do
+      create(:account_user_working_hour, account_user: account_user, day_of_week: Time.current.wday, open_hour: 0, close_hour: 0)
+      create(:account_user_special_day, account_user: account_user, date: Time.current.to_date, day_off: true, open_hour: nil, close_hour: nil)
+      conversation = create(:conversation, account: account, inbox: inbox, team: team, assignee: agent)
+
+      described_class.perform_now
+
+      expect(conversation.reload.assignee_id).to eq(on_shift_agent.id)
+    end
+  end
+
   context 'when nobody is available' do
     it 'keeps conversations with the off-shift agent' do
       conversation = create(:conversation, account: account, inbox: inbox, team: team, assignee: agent, status: :open)

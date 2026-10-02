@@ -173,6 +173,28 @@ RSpec.describe 'Agents API', type: :request do
         expect(account_user.working_hours.first).to have_attributes(day_of_week: 1, open_hour: 9, close_hour: 18)
       end
 
+      it 'replaces the special days of an agent and lists the upcoming ones' do
+        account_user = other_agent.account_users.find_by!(account_id: account.id)
+        create(:account_user_special_day, account_user: account_user, date: 1.week.ago.to_date)
+        tomorrow = (Time.current.in_time_zone('Europe/Tallinn') + 1.day).to_date
+
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: {
+              schedule_timezone: 'Europe/Tallinn',
+              special_days: [
+                { date: tomorrow.to_s, day_off: true },
+                { date: (tomorrow + 1.day).to_s, day_off: false, open_hour: 10, open_minutes: 0, close_hour: 18, close_minutes: 30 }
+              ]
+            },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(account_user.special_days.order(:date).pluck(:date, :day_off, :open_hour, :close_minutes))
+          .to eq([[tomorrow, true, nil, 0], [tomorrow + 1.day, false, 10, 30]])
+        expect(response.parsed_body['special_days'].pluck('date')).to eq([tomorrow.to_s, (tomorrow + 1.day).to_s])
+      end
+
       it 'allows team leads to update schedules for their team members' do
         team = create(:team, account: account)
         create(:team_member, team: team, user: agent, team_lead: true)

@@ -81,6 +81,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     [
       :name, :email, :role, :availability, :auto_offline, :translation_locale, :schedule_enabled, :schedule_timezone,
       { working_hours: [:day_of_week, :open_hour, :open_minutes, :close_hour, :close_minutes],
+        special_days: [:date, :day_off, :open_hour, :open_minutes, :close_hour, :close_minutes],
         schedule_exceptions: [:starts_at, :ends_at, :available, :name] }
     ]
   end
@@ -127,6 +128,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def update_agent_schedule(account_user)
     update_working_hours(account_user) if agent_params.key?(:working_hours)
+    update_special_days(account_user) if agent_params.key?(:special_days)
     update_schedule_exceptions(account_user) if agent_params.key?(:schedule_exceptions)
   end
 
@@ -134,6 +136,14 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     account_user.working_hours.destroy_all
     Array(agent_params[:working_hours]).each do |working_hour|
       account_user.working_hours.create!(working_hour.to_h)
+    end
+  end
+
+  # The form only shows upcoming days, so days that have passed are dropped with the rest
+  def update_special_days(account_user)
+    account_user.special_days.destroy_all
+    Array(agent_params[:special_days]).each do |special_day|
+      account_user.special_days.create!(special_day.to_h)
     end
   end
 
@@ -159,7 +169,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def schedule_update_only?
     keys = agent_params.keys.map(&:to_s)
-    keys.present? && (keys - %w[schedule_enabled schedule_timezone working_hours schedule_exceptions]).empty?
+    keys.present? && (keys - %w[schedule_enabled schedule_timezone working_hours special_days schedule_exceptions]).empty?
   end
 end
 

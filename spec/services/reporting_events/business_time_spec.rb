@@ -51,6 +51,19 @@ RSpec.describe ReportingEvents::BusinessTime do
       expect(business_time.seconds_between(at(monday, 7), at(monday, 15))).to eq 1.hour
     end
 
+    it 'leaves out a special day off of the only agent on shift' do
+      morning_agent.special_days.create!(date: monday, day_off: true)
+
+      expect(business_time.seconds_between(at(monday, 7), at(monday, 15))).to eq 1.hour
+    end
+
+    it 'counts the special hours of a date instead of the weekly ones' do
+      morning_agent.special_days.create!(date: monday, open_hour: 9, close_hour: 11)
+
+      # 09:00 to 11:00 of the morning agent, and 14:00 to 15:00 of the evening agent
+      expect(business_time.seconds_between(at(monday, 7), at(monday, 15))).to eq 3.hours
+    end
+
     it 'counts an extra shift outside the weekly hours' do
       morning_agent.schedule_exceptions.create!(starts_at: at(monday + 5, 10), ends_at: at(monday + 5, 12), available: true)
 

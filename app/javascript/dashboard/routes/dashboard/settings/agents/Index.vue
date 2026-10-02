@@ -295,6 +295,7 @@ const confirmDeletion = () => {
         :schedule-enabled="currentAgent.schedule_enabled"
         :schedule-timezone="currentAgent.schedule_timezone"
         :working-hours="currentAgent.working_hours"
+        :special-days="currentAgent.special_days"
         :schedule-exceptions="currentAgent.schedule_exceptions"
         @close="hideEditPopup"
       />
