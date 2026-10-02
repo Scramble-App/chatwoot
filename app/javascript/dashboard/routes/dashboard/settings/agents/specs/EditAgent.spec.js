@@ -23,7 +23,6 @@ const mountComponent = props =>
       scheduleEnabled: true,
       scheduleTimezone: '',
       workingHours: [],
-      scheduleExceptions: [],
       ...props,
     },
     global: {

@@ -33,14 +33,5 @@ json.special_days do
     json.close_minutes special_day.close_minutes
   end
 end
-json.schedule_exceptions do
-  json.array! resource.current_account_user&.schedule_exceptions || [] do |schedule_exception|
-    json.id schedule_exception.id
-    json.starts_at schedule_exception.starts_at
-    json.ends_at schedule_exception.ends_at
-    json.available schedule_exception.available
-    json.name schedule_exception.name
-  end
-end
 json.thumbnail resource.avatar_url
 json.custom_role_id resource.current_account_user&.custom_role_id if ChatwootApp.enterprise?

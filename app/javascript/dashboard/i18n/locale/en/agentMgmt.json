@@ -29,10 +29,6 @@
       "ADD_SPECIAL_DAY": "Add day",
       "DATE": "Date",
       "DAY_OFF": "Day off",
-      "EXCEPTIONS": "Exceptions",
-      "ADD_EXCEPTION": "Add exception",
-      "EXCEPTION_NAME": "Name",
-      "AVAILABLE": "Available",
       "DAYS": {
         "SUNDAY": "Sunday",
         "MONDAY": "Monday",

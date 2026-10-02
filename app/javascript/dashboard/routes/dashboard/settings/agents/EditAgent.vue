@@ -64,10 +64,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  scheduleExceptions: {
-    type: Array,
-    default: () => [],
-  },
 });
 
 const emit = defineEmits(['close']);
@@ -85,20 +81,6 @@ function formatTime(hour = 9, minutes = 0) {
 function parseTime(value) {
   const [hour, minutes] = value.split(':').map(item => Number(item));
   return { hour, minutes };
-}
-
-function formatDateTime(value) {
-  if (!value) return '';
-
-  const date = new Date(value);
-  const offsetDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60000
-  );
-  return offsetDate.toISOString().slice(0, 16);
-}
-
-function normalizeDateTime(value) {
-  return value ? new Date(value).toISOString() : null;
 }
 
 const agentName = ref(props.name);
@@ -135,14 +117,6 @@ const specialDayMinDate = computed(() =>
     scheduleTimezone.value || DEFAULT_AGENT_SCHEDULE_TIMEZONE,
     'yyyy-MM-dd'
   )
-);
-const scheduleExceptions = ref(
-  props.scheduleExceptions.map(scheduleException => ({
-    name: scheduleException.name || '',
-    starts_at: formatDateTime(scheduleException.starts_at),
-    ends_at: formatDateTime(scheduleException.ends_at),
-    available: !!scheduleException.available,
-  }))
 );
 const agentCredentials = ref({ email: props.email });
 
@@ -262,19 +236,6 @@ function removeSpecialDay(index) {
   );
 }
 
-function addScheduleException() {
-  scheduleExceptions.value = [
-    ...scheduleExceptions.value,
-    { name: '', starts_at: '', ends_at: '', available: false },
-  ];
-}
-
-function removeScheduleException(index) {
-  scheduleExceptions.value = scheduleExceptions.value.filter(
-    (_, itemIndex) => itemIndex !== index
-  );
-}
-
 function normalizedWorkingHours() {
   return workingHours.value.map(workingHour => {
     const openTime = parseTime(workingHour.open_time);
@@ -308,20 +269,6 @@ function normalizedSpecialDays() {
     });
 }
 
-function normalizedScheduleExceptions() {
-  return scheduleExceptions.value
-    .filter(
-      scheduleException =>
-        scheduleException.starts_at && scheduleException.ends_at
-    )
-    .map(scheduleException => ({
-      name: scheduleException.name,
-      starts_at: normalizeDateTime(scheduleException.starts_at),
-      ends_at: normalizeDateTime(scheduleException.ends_at),
-      available: scheduleException.available,
-    }));
-}
-
 const editAgent = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
@@ -337,7 +284,6 @@ const editAgent = async () => {
         scheduleTimezone.value || DEFAULT_AGENT_SCHEDULE_TIMEZONE,
       working_hours: normalizedWorkingHours(),
       special_days: normalizedSpecialDays(),
-      schedule_exceptions: normalizedScheduleExceptions(),
     };
 
     if (scheduleEnabled.value) {
@@ -554,54 +500,6 @@ const resetPassword = async () => {
             <input v-model="specialDay.day_off" type="checkbox" />
             {{ $t('AGENT_MGMT.SCHEDULE.DAY_OFF') }}
           </label>
-        </div>
-
-        <div class="flex items-center justify-between">
-          <h3 class="text-heading-3 text-n-slate-12 mb-0">
-            {{ $t('AGENT_MGMT.SCHEDULE.EXCEPTIONS') }}
-          </h3>
-          <Button
-            ghost
-            type="button"
-            icon="i-lucide-plus"
-            :label="$t('AGENT_MGMT.SCHEDULE.ADD_EXCEPTION')"
-            @click.prevent="addScheduleException"
-          />
-        </div>
-
-        <div
-          v-for="(scheduleException, index) in scheduleExceptions"
-          :key="`schedule-exception-${index}`"
-          class="grid grid-cols-12 gap-2 items-end"
-        >
-          <label class="col-span-3">
-            {{ $t('AGENT_MGMT.SCHEDULE.EXCEPTION_NAME') }}
-            <input v-model="scheduleException.name" type="text" />
-          </label>
-          <label class="col-span-3">
-            {{ $t('AGENT_MGMT.SCHEDULE.START') }}
-            <input
-              v-model="scheduleException.starts_at"
-              type="datetime-local"
-            />
-          </label>
-          <label class="col-span-3">
-            {{ $t('AGENT_MGMT.SCHEDULE.END') }}
-            <input v-model="scheduleException.ends_at" type="datetime-local" />
-          </label>
-          <label class="col-span-1 flex items-center gap-2 pb-2">
-            <input v-model="scheduleException.available" type="checkbox" />
-            {{ $t('AGENT_MGMT.SCHEDULE.AVAILABLE') }}
-          </label>
-          <div class="col-span-2 pb-1">
-            <Button
-              ghost
-              type="button"
-              icon="i-lucide-trash"
-              :label="$t('AGENT_MGMT.SCHEDULE.REMOVE')"
-              @click.prevent="removeScheduleException(index)"
-            />
-          </div>
         </div>
       </div>
 

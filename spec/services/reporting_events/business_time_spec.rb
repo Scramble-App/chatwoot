@@ -45,12 +45,6 @@ RSpec.describe ReportingEvents::BusinessTime do
       expect(business_time.seconds_between(at(monday + 4, 21, 30), at(monday + 7, 7, 30))).to eq 1.hour
     end
 
-    it 'leaves out time off of the only agent on shift' do
-      morning_agent.schedule_exceptions.create!(starts_at: at(monday, 0), ends_at: at(monday + 1, 0), available: false)
-
-      expect(business_time.seconds_between(at(monday, 7), at(monday, 15))).to eq 1.hour
-    end
-
     it 'leaves out a special day off of the only agent on shift' do
       morning_agent.special_days.create!(date: monday, day_off: true)
 
@@ -64,8 +58,8 @@ RSpec.describe ReportingEvents::BusinessTime do
       expect(business_time.seconds_between(at(monday, 7), at(monday, 15))).to eq 3.hours
     end
 
-    it 'counts an extra shift outside the weekly hours' do
-      morning_agent.schedule_exceptions.create!(starts_at: at(monday + 5, 10), ends_at: at(monday + 5, 12), available: true)
+    it 'counts a special shift on a day without weekly hours' do
+      morning_agent.special_days.create!(date: monday + 5, open_hour: 10, close_hour: 12)
 
       expect(business_time.seconds_between(at(monday + 5, 9), at(monday + 5, 13))).to eq 2.hours
     end
@@ -105,14 +99,6 @@ RSpec.describe ReportingEvents::BusinessTime do
     scheduled_agent({ 0 => [0, 6] })
 
     expect(business_time.seconds_between(at(monday + 26, 23), at(monday + 27, 7))).to eq 7.hours
-  end
-
-  it 'follows the exception that started last when exceptions overlap' do
-    agent = scheduled_agent(weekdays(7, 14))
-    agent.schedule_exceptions.create!(starts_at: at(monday, 0), ends_at: at(monday + 1, 0), available: false)
-    agent.schedule_exceptions.create!(starts_at: at(monday, 10), ends_at: at(monday, 12), available: true)
-
-    expect(business_time.seconds_between(at(monday, 7), at(monday, 14))).to eq 2.hours
   end
 
   it "measures an agent's own reply in their own shifts" do

@@ -36,7 +36,6 @@ class AccountUser < ApplicationRecord
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
   has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :destroy_async
-  has_many :schedule_exceptions, class_name: 'AccountUserScheduleException', dependent: :destroy_async
   has_many :special_days, class_name: 'AccountUserSpecialDay', dependent: :destroy_async
 
   enum role: { agent: 0, administrator: 1 }
@@ -44,7 +43,6 @@ class AccountUser < ApplicationRecord
 
   accepts_nested_attributes_for :account
   accepts_nested_attributes_for :working_hours, allow_destroy: true
-  accepts_nested_attributes_for :schedule_exceptions, allow_destroy: true
 
   after_create_commit :notify_creation, :create_notification_setting
   after_destroy :notify_deletion, :remove_user_from_account
@@ -67,9 +65,6 @@ class AccountUser < ApplicationRecord
   end
 
   def schedule_available_at?(time = Time.current)
-    active_exception = schedule_exceptions.active_at(time).order(starts_at: :desc).first
-    return active_exception.available? if active_exception.present?
-
     local_date = time.in_time_zone(schedule_time_zone).to_date
     # A shift of the day before can still run overnight
     [local_date - 1.day, local_date].any? do |date|

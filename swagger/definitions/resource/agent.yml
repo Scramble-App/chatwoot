@@ -47,9 +47,9 @@ properties:
     description: Weekly schedule intervals for the agent.
     items:
       type: object
-  schedule_exceptions:
+  special_days:
     type: array
-    description: One-off schedule exceptions for the agent.
+    description: Upcoming dates on which the agent works other hours than their weekly ones, or has a day off.
     items:
       type: object
   thumbnail:

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_02_090000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_02_120000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -38,20 +38,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_090000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id"], name: "index_account_saml_settings_on_account_id"
-  end
-
-  create_table "account_user_schedule_exceptions", force: :cascade do |t|
-    t.bigint "account_id", null: false
-    t.bigint "account_user_id", null: false
-    t.datetime "starts_at", null: false
-    t.datetime "ends_at", null: false
-    t.boolean "available", default: false, null: false
-    t.string "name"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["account_id"], name: "index_account_user_schedule_exceptions_on_account_id"
-    t.index ["account_user_id", "starts_at", "ends_at"], name: "idx_account_user_schedule_exceptions_on_range"
-    t.index ["account_user_id"], name: "index_account_user_schedule_exceptions_on_account_user_id"
   end
 
   create_table "account_user_special_days", force: :cascade do |t|
@@ -1455,8 +1441,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_090000) do
     t.index ["inbox_id"], name: "index_working_hours_on_inbox_id"
   end
 
-  add_foreign_key "account_user_schedule_exceptions", "account_users"
-  add_foreign_key "account_user_schedule_exceptions", "accounts"
   add_foreign_key "account_user_special_days", "account_users"
   add_foreign_key "account_user_special_days", "accounts"
   add_foreign_key "account_user_working_hours", "account_users"

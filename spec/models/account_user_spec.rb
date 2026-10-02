@@ -57,21 +57,6 @@ RSpec.describe AccountUser do
       end
     end
 
-    it 'lets exceptions override weekly intervals' do
-      create(:account_user_working_hour, account_user: account_user, day_of_week: 1, open_hour: 9, close_hour: 18)
-      create(
-        :account_user_schedule_exception,
-        account_user: account_user,
-        starts_at: Time.zone.parse('2026-06-01 09:00:00 UTC'),
-        ends_at: Time.zone.parse('2026-06-01 12:00:00 UTC'),
-        available: false
-      )
-
-      travel_to Time.zone.parse('2026-06-01 10:00:00 UTC') do
-        expect(account_user.availability_status).to eq('offline')
-      end
-    end
-
     context 'with a special day' do
       # Monday, 1 June 2026, with weekly hours from 14:00 to 22:00
       let(:monday) { Date.new(2026, 6, 1) }
@@ -104,14 +89,6 @@ RSpec.describe AccountUser do
         create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 20, close_hour: 2)
 
         expect(available_at?('2026-06-02 01:00')).to be(true)
-      end
-
-      it 'still lets an exception override it' do
-        create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 10, close_hour: 18)
-        create(:account_user_schedule_exception, account_user: account_user, available: false,
-                                                 starts_at: Time.zone.parse('2026-06-01 10:00 UTC'), ends_at: Time.zone.parse('2026-06-01 12:00 UTC'))
-
-        expect(available_at?('2026-06-01 11:00')).to be(false)
       end
     end
   end

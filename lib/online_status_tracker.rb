@@ -67,7 +67,7 @@ class OnlineStatusTracker
 
     account.account_users
            .where(schedule_enabled: true)
-           .includes(:working_hours, :special_days, :schedule_exceptions)
+           .includes(:working_hours, :special_days)
            .find_each do |account_user|
       users[account_user.user_id.to_s] = account_user.scheduled_availability_at
     end
