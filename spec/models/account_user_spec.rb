@@ -90,6 +90,13 @@ RSpec.describe AccountUser do
         expect([available_at?('2026-06-01 11:00'), available_at?('2026-06-01 20:00')]).to eq([true, false])
       end
 
+      it 'takes the day off even when the date also has special hours' do
+        create(:account_user_special_day, account_user: account_user, date: monday, day_off: true, open_hour: nil, close_hour: nil)
+        create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 10, close_hour: 18)
+
+        expect(available_at?('2026-06-01 11:00')).to be(false)
+      end
+
       it 'goes back to the weekly hours on other dates' do
         create(:account_user_special_day, account_user: account_user, date: monday, day_off: true, open_hour: nil, close_hour: nil)
 
@@ -100,6 +107,14 @@ RSpec.describe AccountUser do
         create(:account_user_special_day, account_user: account_user, date: monday, open_hour: 20, close_hour: 2)
 
         expect(available_at?('2026-06-02 01:00')).to be(true)
+      end
+
+      it 'takes the date in the schedule timezone' do
+        account_user.update!(schedule_timezone: 'Europe/Tallinn')
+        create(:account_user_special_day, account_user: account_user, date: monday + 1, open_hour: 0, close_hour: 3)
+
+        # 22:30 UTC on Monday is 01:30 on Tuesday in Tallinn
+        expect(available_at?('2026-06-01 22:30')).to be(true)
       end
     end
   end

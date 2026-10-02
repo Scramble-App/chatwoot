@@ -75,17 +75,23 @@ class AccountUser < ApplicationRecord
   end
 
   # [start, finish) of the shifts of a date in the schedule timezone: its special schedule if it has one, otherwise its
-  # weekly hours
+  # weekly hours. A day off wins over special hours on the same date.
   def schedule_shifts_on(date)
     special = special_days.select { |special_day| special_day.date == date }
-    hours = special.any? ? special.reject(&:day_off?) : working_hours.select { |working_hour| working_hour.day_of_week == date.wday }
+    return [] if special.any?(&:day_off?)
+
+    hours = special.presence || working_hours.select { |working_hour| working_hour.day_of_week == date.wday }
     zone = ActiveSupport::TimeZone[schedule_time_zone]
     hours.map { |hour| hour.shift_on(date, zone) }
   end
 
+  def schedule_today
+    Time.current.in_time_zone(schedule_time_zone).to_date
+  end
+
   # Special days from today on in the schedule timezone, since past ones no longer apply
   def upcoming_special_days
-    today = Time.current.in_time_zone(schedule_time_zone).to_date
+    today = schedule_today
     special_days.select { |special_day| special_day.date >= today }.sort_by { |special_day| [special_day.date, special_day.open_hour.to_i] }
   end
 

@@ -137,9 +137,10 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     end
   end
 
-  # The form only shows upcoming days, so days that have passed are dropped with the rest
+  # The form only shows days from today on, which replace the saved ones. Older days are dropped, except yesterday's,
+  # whose special shift can still run overnight.
   def update_special_days(account_user)
-    account_user.special_days.destroy_all
+    account_user.special_days.where.not(date: account_user.schedule_today - 1.day).destroy_all
     Array(agent_params[:special_days]).each do |special_day|
       account_user.special_days.create!(special_day.to_h)
     end
