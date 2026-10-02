@@ -28,6 +28,17 @@ RSpec.describe AccountUser do
     end
   end
 
+  describe 'destroying an account user' do
+    it 'removes their schedule instead of tripping its foreign keys' do
+      create(:account_user_working_hour, account_user: account_user, day_of_week: 1, open_hour: 9, close_hour: 18)
+      create(:account_user_special_day, account_user: account_user, date: Date.new(2026, 6, 1))
+
+      expect { account_user.destroy! }.not_to raise_error
+      expect(AccountUserWorkingHour.where(account_user_id: account_user.id)).to be_empty
+      expect(AccountUserSpecialDay.where(account_user_id: account_user.id)).to be_empty
+    end
+  end
+
   describe 'schedule availability' do
     before do
       account_user.update!(schedule_enabled: true, schedule_timezone: 'UTC')

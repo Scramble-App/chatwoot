@@ -35,8 +35,10 @@ class AccountUser < ApplicationRecord
   belongs_to :account
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
-  has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :destroy_async
-  has_many :special_days, class_name: 'AccountUserSpecialDay', dependent: :destroy_async
+  # Deleted inline: destroy_async would delete them after the account user, and their foreign keys block that.
+  # delete_all rather than destroy because they have no destroy callbacks.
+  has_many :working_hours, class_name: 'AccountUserWorkingHour', dependent: :delete_all
+  has_many :special_days, class_name: 'AccountUserSpecialDay', dependent: :delete_all
 
   enum role: { agent: 0, administrator: 1 }
   enum availability: { online: 0, offline: 1, busy: 2 }
