@@ -81,7 +81,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     [
       :name, :email, :role, :availability, :auto_offline, :translation_locale, :schedule_enabled, :schedule_timezone,
       { working_hours: [:day_of_week, :open_hour, :open_minutes, :close_hour, :close_minutes],
-        schedule_exceptions: [:starts_at, :ends_at, :available, :name] }
+        special_days: [:date, :day_off, :open_hour, :open_minutes, :close_hour, :close_minutes] }
     ]
   end
 
@@ -127,7 +127,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def update_agent_schedule(account_user)
     update_working_hours(account_user) if agent_params.key?(:working_hours)
-    update_schedule_exceptions(account_user) if agent_params.key?(:schedule_exceptions)
+    update_special_days(account_user) if agent_params.key?(:special_days)
   end
 
   def update_working_hours(account_user)
@@ -137,10 +137,12 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     end
   end
 
-  def update_schedule_exceptions(account_user)
-    account_user.schedule_exceptions.destroy_all
-    Array(agent_params[:schedule_exceptions]).each do |schedule_exception|
-      account_user.schedule_exceptions.create!(schedule_exception.to_h)
+  # The form only shows days from today on, which replace the saved ones. Older days are dropped, except yesterday's,
+  # whose special shift can still run overnight.
+  def update_special_days(account_user)
+    account_user.special_days.where.not(date: account_user.schedule_today - 1.day).destroy_all
+    Array(agent_params[:special_days]).each do |special_day|
+      account_user.special_days.create!(special_day.to_h)
     end
   end
 
@@ -159,7 +161,7 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def schedule_update_only?
     keys = agent_params.keys.map(&:to_s)
-    keys.present? && (keys - %w[schedule_enabled schedule_timezone working_hours schedule_exceptions]).empty?
+    keys.present? && (keys - %w[schedule_enabled schedule_timezone working_hours special_days]).empty?
   end
 end
 

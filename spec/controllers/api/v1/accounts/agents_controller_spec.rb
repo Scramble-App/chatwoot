@@ -173,18 +173,88 @@ RSpec.describe 'Agents API', type: :request do
         expect(account_user.working_hours.first).to have_attributes(day_of_week: 1, open_hour: 9, close_hour: 18)
       end
 
-      it 'allows team leads to update schedules for their team members' do
-        team = create(:team, account: account)
-        create(:team_member, team: team, user: agent, team_lead: true)
-        create(:team_member, team: team, user: other_agent)
+      it 'replaces the special days of an agent and lists the upcoming ones' do
+        account_user = other_agent.account_users.find_by!(account_id: account.id)
+        create(:account_user_special_day, account_user: account_user, date: 1.week.ago.to_date)
+        tomorrow = (Time.current.in_time_zone('Europe/Tallinn') + 1.day).to_date
 
         put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
-            params: { schedule_enabled: true, schedule_timezone: 'UTC' },
-            headers: agent.create_new_auth_token,
+            params: {
+              schedule_timezone: 'Europe/Tallinn',
+              special_days: [
+                { date: tomorrow.to_s, day_off: true },
+                { date: (tomorrow + 1.day).to_s, day_off: false, open_hour: 10, open_minutes: 0, close_hour: 18, close_minutes: 30 }
+              ]
+            },
+            headers: admin.create_new_auth_token,
             as: :json
 
         expect(response).to have_http_status(:success)
-        expect(other_agent.account_users.find_by!(account_id: account.id).reload.schedule_enabled).to be(true)
+        expect(account_user.special_days.order(:date).pluck(:date, :day_off, :open_hour, :close_minutes))
+          .to eq([[tomorrow, true, nil, 0], [tomorrow + 1.day, false, 10, 30]])
+        expect(response.parsed_body['special_days'].pluck('date')).to eq([tomorrow.to_s, (tomorrow + 1.day).to_s])
+      end
+
+      it "keeps yesterday's special day, whose shift can still run overnight, and drops older ones" do
+        account_user = other_agent.account_users.find_by!(account_id: account.id)
+        account_user.update!(schedule_timezone: 'Europe/Tallinn')
+        today = account_user.schedule_today
+        create(:account_user_special_day, account_user: account_user, date: today - 1.day, open_hour: 20, close_hour: 6)
+        create(:account_user_special_day, account_user: account_user, date: today - 2.days)
+        create(:account_user_special_day, account_user: account_user, date: today + 1.day)
+
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { special_days: [{ date: (today + 2.days).to_s, day_off: true }] },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(account_user.special_days.order(:date).pluck(:date, :open_hour)).to eq([[today - 1.day, 20], [today + 2.days, nil]])
+      end
+
+      context 'when the user is a team lead' do
+        let(:team) { create(:team, account: account) }
+        let(:special_days) { [{ date: Date.tomorrow.to_s, day_off: true }] }
+
+        before do
+          create(:team_member, team: team, user: agent, team_lead: true)
+          create(:team_member, team: team, user: other_agent)
+        end
+
+        it 'allows them to update schedules for their team members' do
+          put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+              params: { schedule_enabled: true, schedule_timezone: 'UTC', special_days: special_days },
+              headers: agent.create_new_auth_token,
+              as: :json
+
+          expect(response).to have_http_status(:success)
+          account_user = other_agent.account_users.find_by!(account_id: account.id).reload
+          expect(account_user.schedule_enabled).to be(true)
+          expect(account_user.special_days.pluck(:date)).to eq([Date.tomorrow])
+        end
+
+        it 'does not let them set special days for agents outside their teams' do
+          outsider = create(:user, account: account, role: :agent)
+
+          put "/api/v1/accounts/#{account.id}/agents/#{outsider.id}",
+              params: { special_days: special_days },
+              headers: agent.create_new_auth_token,
+              as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+          expect(outsider.account_users.first.special_days).to be_empty
+        end
+
+        it 'does not let them change anything besides the schedule' do
+          put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+              params: { role: 'administrator', special_days: special_days },
+              headers: agent.create_new_auth_token,
+              as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+          account_user = other_agent.account_users.first.reload
+          expect([account_user.role, account_user.special_days.count]).to eq(['agent', 0])
+        end
       end
     end
   end

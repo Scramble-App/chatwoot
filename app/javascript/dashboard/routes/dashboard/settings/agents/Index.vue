@@ -295,7 +295,7 @@ const confirmDeletion = () => {
         :schedule-enabled="currentAgent.schedule_enabled"
         :schedule-timezone="currentAgent.schedule_timezone"
         :working-hours="currentAgent.working_hours"
-        :schedule-exceptions="currentAgent.schedule_exceptions"
+        :special-days="currentAgent.special_days"
         @close="hideEditPopup"
       />
     </woot-modal>
