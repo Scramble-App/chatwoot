@@ -41,6 +41,7 @@ module Events::Types
   CONVERSATION_SUMMARY_UPDATED = 'conversation.summary_updated'
   KNOWLEDGE_ANSWER_UPDATED = 'conversation.knowledge_answer_updated'
   PREPARED_REPLY_UPDATED = 'conversation.prepared_reply_updated'
+  DEVELOPER_REPORT_UPDATED = 'conversation.developer_report_updated'
 
   # contact events
   CONTACT_CREATED = 'contact.created'

@@ -11,6 +11,12 @@ FactoryBot.define do
     user { association :user, account: account }
   end
 
+  factory :ai_generation_developer_report, class: 'AiGenerations::DeveloperReport' do
+    account
+    conversation { association :conversation, account: account }
+    user { association :user, account: account }
+  end
+
   factory :ai_generation_prepared_reply, class: 'AiGenerations::PreparedReply' do
     account
     conversation { association :conversation, account: account }

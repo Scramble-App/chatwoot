@@ -26,12 +26,14 @@ const ACTION_KINDS = {
   summarize: KINDS.SUMMARY,
   knowledge_answer: KINDS.KNOWLEDGE_ANSWER,
   prepare_answer: KINDS.PREPARED_REPLY,
+  developer_report: KINDS.DEVELOPER_REPORT,
 };
 
 const KIND_ACTIONS = {
   [KINDS.SUMMARY]: 'summarize',
   [KINDS.KNOWLEDGE_ANSWER]: 'knowledge_answer',
   [KINDS.PREPARED_REPLY]: 'prepare_answer',
+  [KINDS.DEVELOPER_REPORT]: 'developer_report',
 };
 
 const IN_PROGRESS_STATUSES = ['pending', 'running'];
@@ -43,7 +45,9 @@ const FAILURE_ALERT_DURATION = 10000;
  * @returns {string} The event key prefix (REWRITE, SUMMARIZE, or REPLY_SUGGESTION)
  */
 function getEventPrefix(action) {
-  if (action === 'summarize') return 'SUMMARIZE';
+  if (action === 'summarize' || action === 'developer_report') {
+    return 'SUMMARIZE';
+  }
   if (action === 'knowledge_answer') return 'REPLY_SUGGESTION';
   if (action === 'prepare_answer') return 'REPLY_SUGGESTION';
   if (action === 'reply_suggestion') return 'REPLY_SUGGESTION';

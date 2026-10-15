@@ -20,6 +20,7 @@ class ActionCableConnector extends BaseActionCableConnector {
       'conversation.summary_updated': this.onAiSummaryUpdated,
       'conversation.knowledge_answer_updated': this.onAiKnowledgeAnswerUpdated,
       'conversation.prepared_reply_updated': this.onAiPreparedReplyUpdated,
+      'conversation.developer_report_updated': this.onAiDeveloperReportUpdated,
       'conversation.created': this.onConversationCreated,
       'conversation.status_changed': this.onStatusChange,
       'user:logout': this.onLogout,
@@ -82,6 +83,13 @@ class ActionCableConnector extends BaseActionCableConnector {
   onAiPreparedReplyUpdated = data => {
     this.app.$store.dispatch('aiGenerations/updateFromEvent', {
       kind: KINDS.PREPARED_REPLY,
+      data,
+    });
+  };
+
+  onAiDeveloperReportUpdated = data => {
+    this.app.$store.dispatch('aiGenerations/updateFromEvent', {
+      kind: KINDS.DEVELOPER_REPORT,
       data,
     });
   };

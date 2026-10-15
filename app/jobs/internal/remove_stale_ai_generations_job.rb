@@ -6,7 +6,8 @@ class Internal::RemoveStaleAiGenerationsJob < ApplicationJob
   MODELS = [
     AiGenerations::Summary,
     AiGenerations::KnowledgeAnswer,
-    AiGenerations::PreparedReply
+    AiGenerations::PreparedReply,
+    AiGenerations::DeveloperReport
   ].freeze
 
   def perform

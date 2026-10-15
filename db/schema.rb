@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_02_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_15_090000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -177,6 +177,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id"], name: "index_agent_capacity_policies_on_account_id"
+  end
+
+  create_table "ai_generation_developer_reports", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "status", default: 0, null: false
+    t.text "content"
+    t.text "error_message"
+    t.string "provider", default: "openai", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_ai_generation_developer_reports_on_account_id"
+    t.index ["conversation_id", "user_id"], name: "idx_on_conversation_id_user_id_24572e98b5", unique: true
   end
 
   create_table "ai_generation_knowledge_answers", force: :cascade do |t|
@@ -1447,6 +1461,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120000) do
   add_foreign_key "account_user_working_hours", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "ai_generation_developer_reports", "accounts"
+  add_foreign_key "ai_generation_developer_reports", "conversations"
+  add_foreign_key "ai_generation_developer_reports", "users"
   add_foreign_key "ai_generation_knowledge_answers", "accounts"
   add_foreign_key "ai_generation_knowledge_answers", "conversations"
   add_foreign_key "ai_generation_knowledge_answers", "users"

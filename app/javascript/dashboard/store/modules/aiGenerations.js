@@ -5,6 +5,7 @@ export const KINDS = {
   SUMMARY: 'summary',
   KNOWLEDGE_ANSWER: 'knowledge_answer',
   PREPARED_REPLY: 'prepared_reply',
+  DEVELOPER_REPORT: 'developer_report',
 };
 
 export const KIND_LIST = Object.values(KINDS);
@@ -13,6 +14,7 @@ const KIND_PATHS = {
   [KINDS.SUMMARY]: 'summarize',
   [KINDS.KNOWLEDGE_ANSWER]: 'knowledge_answer',
   [KINDS.PREPARED_REPLY]: 'prepare_reply',
+  [KINDS.DEVELOPER_REPORT]: 'developer_report',
 };
 
 const recordKey = (kind, conversationId) => `${kind}:${conversationId}`;

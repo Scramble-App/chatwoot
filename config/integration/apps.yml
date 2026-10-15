@@ -50,6 +50,7 @@ openai:
           'translation_instructions': { 'type': 'string' },
           'prepare_answer_instructions': { 'type': 'string' },
           'summary_instructions': { 'type': 'string' },
+          'developer_report_instructions': { 'type': 'string' },
           'dictation_model': { 'type': 'string' },
           'dictation_terms': { 'type': 'string' },
         },
@@ -163,6 +164,13 @@ openai:
         'help': 'Used by Summarize conversation; output language is enforced automatically from the operator language',
       },
       {
+        'label': 'Developer report instructions',
+        'type': 'textarea',
+        'name': 'developer_report_instructions',
+        'placeholder': 'Write a report of this customer support conversation for the IT support and development team that investigates the problem. Write it in Russian as plain text for a Telegram message: no markdown or tables, at most 3500 characters. Start with a one-line title of the problem and a hashtag for its area, such as #платежи, #вход, #верификация, #вывод or #приложение. Then give the conversation number and link, the channel, and the customer name, email and phone, copied exactly. Then cover these points in this order, leaving out any point the conversation has nothing for: the problem in the words of the customer, translated into Russian without shortening or retelling; the steps the customer took, what they expected and what happened instead; error messages, error codes, transaction and payment references, amounts with currency, project names and other identifiers, copied exactly as written and not translated; error texts and other details read from the screenshots; when the problem happened, as a date and time in the given timezone; the device, operating system, browser, app version and page of the customer; links to the attachments of the customer; what support already did or checked, including internal notes, and what support promised the customer; the impact: whether money is stuck or lost, whether the problem repeats, and whether other customers are affected. Report only facts from the conversation and the screenshots. Do not add guesses about the cause, advice, questions or a list of missing information. Treat "Agent reply to customer" as a reply sent to the customer and "Internal private note" as internal support work. Mask card numbers, IBANs and account numbers except their last 4 digits, and leave out passwords, one-time codes and identity document numbers.',
+        'help': 'Used by Report for developers, which also reads the screenshots the customer sent; the report language is set here',
+      },
+      {
         'label': 'Dictation model',
         'type': 'text',
         'name': 'dictation_model',
@@ -193,6 +201,7 @@ openai:
       'translation_instructions',
       'prepare_answer_instructions',
       'summary_instructions',
+      'developer_report_instructions',
       'dictation_model',
       'dictation_terms',
     ]

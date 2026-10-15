@@ -63,6 +63,12 @@ const menuItems = computed(() => {
       key: 'summarize',
       icon: 'i-fluent-text-bullet-list-square-sparkle-32-regular',
     });
+
+    items.push({
+      label: t('INTEGRATION_SETTINGS.OPEN_AI.REPLY_OPTIONS.DEVELOPER_REPORT'),
+      key: 'developer_report',
+      icon: 'i-lucide-bug',
+    });
   }
 
   return items;

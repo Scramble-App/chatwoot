@@ -172,6 +172,28 @@ describe('#aiGenerations actions', () => {
     expect(commit).toHaveBeenCalledTimes(1);
   });
 
+  it('request asks for a developer report at its own path', async () => {
+    const record = { id: 3, status: 'pending', updated_at: 10 };
+    ConversationApi.requestAiGeneration.mockResolvedValue({ data: record });
+    const commit = vi.fn();
+
+    await actions.request(
+      { commit },
+      { kind: 'developer_report', conversationId: 45 }
+    );
+
+    expect(ConversationApi.requestAiGeneration).toHaveBeenCalledWith({
+      conversationId: 45,
+      path: 'developer_report',
+      content: undefined,
+    });
+    expect(commit).toHaveBeenCalledWith(types.SET_AI_GENERATION, {
+      kind: 'developer_report',
+      conversationId: 45,
+      record,
+    });
+  });
+
   it('fetch removes a local record that no longer exists on the server', async () => {
     ConversationApi.fetchAiGeneration.mockResolvedValue({ status: 204 });
     const commit = vi.fn();

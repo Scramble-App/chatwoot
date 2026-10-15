@@ -1211,7 +1211,8 @@ export default {
     onSubmitCopilotReply() {
       const action = this.copilot.currentAction.value;
       const acceptedMessage = this.copilot.accept();
-      if (action === 'summarize') {
+      // Summaries and developer reports are for the team, so they land in a private note
+      if (['summarize', 'developer_report'].includes(action)) {
         const targetReplyType = REPLY_EDITOR_MODES.NOTE;
         const trimmedMessage = trimContent(acceptedMessage, this.maxLength);
         const draftKey = this.getDraftKey(
