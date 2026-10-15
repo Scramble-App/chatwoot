@@ -9,7 +9,8 @@ class DeveloperReports::ReportService
   # The customer's newest screenshots are sent to the model; others are only linked in the context
   IMAGE_LIMIT = 4
   IMAGE_BYTE_LIMIT = 5.megabytes
-  IMAGE_CONTENT_TYPES = %w[image/png image/jpeg image/webp image/gif].freeze
+  # Animated GIFs are rejected by OpenAI, so GIFs are only linked
+  IMAGE_CONTENT_TYPES = %w[image/png image/jpeg image/webp].freeze
 
   pattr_initialize [:conversation!]
 
@@ -69,8 +70,16 @@ class DeveloperReports::ReportService
     [
       ("Customer browser: #{parts.join(', ')}" if parts.any?),
       ("Browser language: #{attributes['browser_language']}" if attributes['browser_language'].present?),
-      ("Page the chat was opened on: #{attributes['referer']}" if attributes['referer'].present?)
+      ("Page the chat was opened on: #{page_url(attributes['referer'])}" if attributes['referer'].present?)
     ]
+  end
+
+  # Without the query and the fragment, which can carry tokens, e.g. of a password reset link. The report goes to Telegram.
+  def page_url(referer)
+    uri = URI.parse(referer)
+    uri.query = nil
+    uri.fragment = nil
+    uri.to_s
   end
 
   # The newest messages that fit the limit, oldest to newest, so the latest details are never dropped

@@ -531,12 +531,13 @@ export default {
       const key = this.getDraftKey(this.conversationIdByRoute, replyType);
       return this.copilotAcceptedMessages[key] || '';
     },
-    setCopilotAcceptedMessage(message, replyType = this.replyType) {
+    setCopilotAcceptedMessage(
+      message,
+      replyType = this.replyType,
+      maxLength = this.maxLength
+    ) {
       const key = this.getDraftKey(this.conversationIdByRoute, replyType);
-      this.copilotAcceptedMessages[key] = trimContent(
-        message || '',
-        this.maxLength
-      );
+      this.copilotAcceptedMessages[key] = trimContent(message || '', maxLength);
     },
     clearCopilotAcceptedMessage(replyType = this.replyType) {
       const key = this.getDraftKey(this.conversationIdByRoute, replyType);
@@ -1214,7 +1215,9 @@ export default {
       // Summaries and developer reports are for the team, so they land in a private note
       if (['summarize', 'developer_report'].includes(action)) {
         const targetReplyType = REPLY_EDITOR_MODES.NOTE;
-        const trimmedMessage = trimContent(acceptedMessage, this.maxLength);
+        // maxLength is still the reply limit of the channel here, which can cut a long report short
+        const noteMaxLength = MESSAGE_MAX_LENGTH.GENERAL;
+        const trimmedMessage = trimContent(acceptedMessage, noteMaxLength);
         const draftKey = this.getDraftKey(
           this.conversationIdByRoute,
           targetReplyType
@@ -1225,7 +1228,11 @@ export default {
           key: draftKey,
           message: trimmedMessage,
         });
-        this.setCopilotAcceptedMessage(acceptedMessage, targetReplyType);
+        this.setCopilotAcceptedMessage(
+          acceptedMessage,
+          targetReplyType,
+          noteMaxLength
+        );
         this.setReplyMode(targetReplyType);
         this.$nextTick(() => {
           this.message = trimmedMessage;

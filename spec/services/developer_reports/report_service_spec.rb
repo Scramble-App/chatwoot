@@ -23,7 +23,7 @@ RSpec.describe DeveloperReports::ReportService do
       conversation.update!(additional_attributes: {
                              'browser' => { 'browser_name' => 'Chrome', 'browser_version' => '129.0', 'platform_name' => 'macOS',
                                             'platform_version' => '14', 'device_name' => 'Macintosh' },
-                             'browser_language' => 'de', 'referer' => 'https://app.example.com/invest'
+                             'browser_language' => 'de', 'referer' => 'https://app.example.com/invest?token=secret#step'
                            })
       create_message('Payment failed: 3DS error', :incoming, created_at: Time.zone.parse('2026-10-14 15:30 UTC'))
       create_message('Please try again', :outgoing, created_at: Time.zone.parse('2026-10-14 15:35 UTC'))
@@ -42,6 +42,7 @@ RSpec.describe DeveloperReports::ReportService do
           '[2026-10-14 18:35] Agent reply to customer: Please try again',
           '[2026-10-14 18:40] Internal private note: Checked the payment provider'
         )
+        expect(args[:context]).not_to include('secret')
         expect(args[:images]).to eq([])
       end
     end

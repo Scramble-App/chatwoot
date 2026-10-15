@@ -109,6 +109,9 @@ RSpec.describe AiGeneratable do
     let!(:prepared_reply) do
       create(:ai_generation_prepared_reply, account: summary.account, conversation: summary.conversation, user: summary.user)
     end
+    let!(:developer_report) do
+      create(:ai_generation_developer_report, account: summary.account, conversation: summary.conversation, user: summary.user)
+    end
 
     it 'lets the conversation be destroyed and takes the generations with it' do
       expect { summary.conversation.destroy! }.not_to raise_error
@@ -116,6 +119,7 @@ RSpec.describe AiGeneratable do
       expect(AiGenerations::Summary.exists?(summary.id)).to be(false)
       expect(AiGenerations::KnowledgeAnswer.exists?(knowledge_answer.id)).to be(false)
       expect(AiGenerations::PreparedReply.exists?(prepared_reply.id)).to be(false)
+      expect(AiGenerations::DeveloperReport.exists?(developer_report.id)).to be(false)
     end
 
     it 'lets the requesting user be destroyed and takes the generations with it' do
@@ -124,6 +128,7 @@ RSpec.describe AiGeneratable do
       expect(AiGenerations::Summary.exists?(summary.id)).to be(false)
       expect(AiGenerations::KnowledgeAnswer.exists?(knowledge_answer.id)).to be(false)
       expect(AiGenerations::PreparedReply.exists?(prepared_reply.id)).to be(false)
+      expect(AiGenerations::DeveloperReport.exists?(developer_report.id)).to be(false)
     end
 
     it 'lets the account be destroyed' do
