@@ -29,6 +29,27 @@ class MessageTranslations::OpenaiSettings
     'Do not say support actions were not recorded when the context contains an Agent reply to customer or an Internal private note.',
     'Do not invent facts, promises, names, dates, or decisions that are not present in the conversation context.'
   ].join(' ').freeze
+  DEFAULT_DEVELOPER_REPORT_INSTRUCTIONS = [
+    'Write a report of this customer support conversation for the IT support and development team that investigates the problem.',
+    'Write it in Russian as plain text for a Telegram message: no markdown or tables, at most 3500 characters.',
+    'Start with a one-line title of the problem and a hashtag for its area, such as #платежи, #вход, #верификация, #вывод or #приложение.',
+    'Then give the conversation number and link, the channel, and the customer name, email and phone, copied exactly.',
+    'Then cover these points in this order, leaving out any point the conversation has nothing for:',
+    'the problem in the words of the customer, translated into Russian without shortening or retelling;',
+    'the steps the customer took, what they expected and what happened instead;',
+    'error messages, error codes, transaction and payment references, amounts with currency, project names and other identifiers,',
+    'copied exactly as written and not translated;',
+    'error texts and other details read from the screenshots;',
+    'when the problem happened, as a date and time in the given timezone;',
+    'the device, operating system, browser, app version and page of the customer;',
+    'links to the attachments of the customer;',
+    'what support already did or checked, including internal notes, and what support promised the customer;',
+    'the impact: whether money is stuck or lost, whether the problem repeats, and whether other customers are affected.',
+    'Report only facts from the conversation and the screenshots.',
+    'Do not add guesses about the cause, advice, questions or a list of missing information.',
+    'Treat "Agent reply to customer" as a reply sent to the customer and "Internal private note" as internal support work.',
+    'Mask card numbers, IBANs and account numbers except their last 4 digits, and leave out passwords, one-time codes and identity document numbers.'
+  ].join(' ').freeze
 
   class << self
     def hook_for(account)
@@ -112,6 +133,10 @@ class MessageTranslations::OpenaiSettings
         "Output language must be #{output_language}. Ignore the customer language for the summary language. Return only text in the output language.",
         hook&.settings&.dig('summary_instructions').presence || DEFAULT_SUMMARY_INSTRUCTIONS
       ].join(' ')
+    end
+
+    def developer_report_instructions(hook)
+      hook&.settings&.dig('developer_report_instructions').presence || DEFAULT_DEVELOPER_REPORT_INSTRUCTIONS
     end
 
     private

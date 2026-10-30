@@ -118,6 +118,7 @@ class Conversation < ApplicationRecord
   # still reference it. delete_all rather than destroy because the model has no destroy callbacks.
   has_many :assignment_events, class_name: 'ConversationAssignmentEvent', dependent: :delete_all
   # These are destroyed inline because their tables carry a restricting foreign key on conversation_id.
+  has_many :ai_generation_developer_reports, class_name: 'AiGenerations::DeveloperReport', dependent: :destroy
   has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
   has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
   has_many :ai_generation_summaries, class_name: 'AiGenerations::Summary', dependent: :destroy

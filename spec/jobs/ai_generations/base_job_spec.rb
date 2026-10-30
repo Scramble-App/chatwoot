@@ -78,7 +78,8 @@ RSpec.describe AiGenerations::BaseJob do
       {
         AiGenerations::KnowledgeAnswerJob => [KnowledgeAnswers::AnswerService, generation],
         AiGenerations::SummaryJob => [ConversationSummaries::SummaryService, create(:ai_generation_summary)],
-        AiGenerations::PreparedReplyJob => [ReplyPreparations::PrepareReplyService, create(:ai_generation_prepared_reply)]
+        AiGenerations::PreparedReplyJob => [ReplyPreparations::PrepareReplyService, create(:ai_generation_prepared_reply)],
+        AiGenerations::DeveloperReportJob => [DeveloperReports::ReportService, create(:ai_generation_developer_report)]
       }.each do |job, (service, record)|
         service_double = instance_double(service)
         allow(service).to receive(:new).and_return(service_double)

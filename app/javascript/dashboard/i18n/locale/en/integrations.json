@@ -184,6 +184,7 @@
         "SUGGESTION": "Suggest a reply",
         "ANSWER_FROM_KNOWLEDGE_BASE": "Answer from knowledge base",
         "SUMMARIZE": "Summarize conversation",
+        "DEVELOPER_REPORT": "Report for developers",
         "ASK_COPILOT": "Ask Copilot"
       },
       "ASSISTANCE_MODAL": {

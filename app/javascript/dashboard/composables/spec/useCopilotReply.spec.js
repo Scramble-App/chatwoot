@@ -165,6 +165,21 @@ describe('useCopilotReply', () => {
   });
 
   describe('execute', () => {
+    it('queues a developer report and shows it as the current action', async () => {
+      ConversationApi.requestAiGeneration.mockResolvedValue({
+        data: { id: 3, status: 'pending', updated_at: 11 },
+      });
+
+      await copilot.execute('developer_report');
+
+      expect(ConversationApi.requestAiGeneration).toHaveBeenCalledWith({
+        conversationId: CONVERSATION_ID,
+        path: 'developer_report',
+        content: undefined,
+      });
+      expect(copilot.currentAction.value).toEqual('developer_report');
+    });
+
     it('alerts with a translated fallback and tracks the failure when queuing fails', async () => {
       ConversationApi.requestAiGeneration.mockRejectedValue(new Error('boom'));
 

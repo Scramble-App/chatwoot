@@ -5,7 +5,8 @@ RSpec.describe Internal::RemoveStaleAiGenerationsJob do
     old_summary = create(:ai_generation_summary)
     old_answer = create(:ai_generation_knowledge_answer)
     old_reply = create(:ai_generation_prepared_reply)
-    [old_summary, old_answer, old_reply].each do |generation|
+    old_report = create(:ai_generation_developer_report)
+    [old_summary, old_answer, old_reply, old_report].each do |generation|
       generation.update!(updated_at: (described_class::RETENTION + 1.day).ago)
     end
 
@@ -14,6 +15,7 @@ RSpec.describe Internal::RemoveStaleAiGenerationsJob do
     expect(AiGenerations::Summary.where(id: old_summary.id)).to be_empty
     expect(AiGenerations::KnowledgeAnswer.where(id: old_answer.id)).to be_empty
     expect(AiGenerations::PreparedReply.where(id: old_reply.id)).to be_empty
+    expect(AiGenerations::DeveloperReport.where(id: old_report.id)).to be_empty
   end
 
   it 'keeps recent generations' do

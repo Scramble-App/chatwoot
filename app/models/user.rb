@@ -86,6 +86,7 @@ class User < ApplicationRecord
 
   has_many :account_users, dependent: :destroy_async
   # These are destroyed inline because their tables carry a restricting foreign key on user_id.
+  has_many :ai_generation_developer_reports, class_name: 'AiGenerations::DeveloperReport', dependent: :destroy
   has_many :ai_generation_knowledge_answers, class_name: 'AiGenerations::KnowledgeAnswer', dependent: :destroy
   has_many :ai_generation_prepared_replies, class_name: 'AiGenerations::PreparedReply', dependent: :destroy
   has_many :ai_generation_summaries, class_name: 'AiGenerations::Summary', dependent: :destroy
