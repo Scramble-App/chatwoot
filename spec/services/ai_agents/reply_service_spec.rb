@@ -213,6 +213,46 @@ RSpec.describe AiAgents::ReplyService do
     expect(events).not_to include(Events::Types::CONVERSATION_TYPING_ON)
   end
 
+  context 'when the visitor writes again after the team resolved the conversation' do
+    before do
+      create_list(:message, 3, conversation: conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot)
+      stub_openai_responses(openai_reply(reply: 'Hi again! What would you like to know?'))
+    end
+
+    # The team resolves the conversation, and the visitor's new message gives it back to the bot
+    def reply_to_returning_visitor
+      conversation.update!(status: :resolved)
+      reply(create(:message, conversation: conversation, account: account, inbox: inbox, sender: contact, content: 'Hi again!'))
+    end
+
+    it 'counts the reply limit again from its handoff note' do
+      create(:message, conversation: conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot, private: true,
+                       content: 'The AI agent passed this conversation to the team.')
+
+      reply_to_returning_visitor
+
+      expect(bot_messages.last.content).to eq('Hi again! What would you like to know?')
+    end
+
+    it "counts the reply limit again from a team member's reply" do
+      create(:message, conversation: conversation, account: account, inbox: inbox, message_type: :outgoing, sender: team_member,
+                       content: 'Happy to help.')
+
+      reply_to_returning_visitor
+
+      expect(bot_messages.last.content).to eq('Hi again! What would you like to know?')
+    end
+
+    it "keeps counting across a team member's private note" do
+      create(:message, conversation: conversation, account: account, inbox: inbox, message_type: :outgoing, sender: team_member, private: true,
+                       content: 'Watching this one.')
+
+      reply_to_returning_visitor
+
+      expect(bot_messages.last.content).to eq(AiAgents::Defaults::FALLBACK_MESSAGE)
+    end
+  end
+
   it 'hands off and posts the fallback message when OpenAI fails' do
     stub_request(:post, AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL).to_return(status: 500, body: { error: { message: 'Server error' } }.to_json)
 

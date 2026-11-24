@@ -311,12 +311,21 @@ RSpec.describe Message do
         conversation.update!(status: :resolved, assignee: agent, team: team)
       end
 
-      it 'gives it to the active AI agent bot as pending, without the assignee and team' do
+      it 'gives it to the active AI agent bot as pending, without the assignee but with the team' do
         create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot)
 
         message.save!
 
-        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: nil, team_id: nil)
+        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: nil, team_id: team.id)
+      end
+
+      it 'starts the wait again from the message for the AI agent bot, so the old assignee is not charged for it' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot)
+        # A muted contact's messages set the wait without reopening the conversation
+        conversation.update!(waiting_since: 2.days.ago)
+
+        expect { message.save! }.not_to have_enqueued_job(ReportingEvents::HandoffWithoutReplyJob)
+        expect(conversation.reload.waiting_since).to be_within(1.second).of(message.created_at)
       end
 
       it 'keeps the assignee and team for a webhook bot' do

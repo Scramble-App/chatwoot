@@ -54,9 +54,25 @@ class AiAgents::HandoffService
   def handoff_changes
     changes = { label_list: conversation.label_list | [label.title], status: :open }
     changes[:waiting_since] = Time.current if conversation.waiting_since.blank?
+    changes.merge(team_changes)
+  end
+
+  # Setting the team assigns one of its agents (AssignmentHandler). A conversation that has the team already, as when the
+  # visitor wrote again after the team resolved it, gets one the same way.
+  def team_changes
     team = agent_bot.ai_agent_settings.handoff_team
-    changes[:team] = team if team && conversation.team_id != team.id
-    changes
+    return {} unless team
+    return { team: team } if conversation.team_id != team.id
+
+    { assignee: team_assignee(team) }.compact
+  end
+
+  # An online team member with capacity, as AssignmentHandler picks one when the team changes, if the team auto assigns
+  def team_assignee(team)
+    return unless team.allow_auto_assign
+
+    agent_ids = conversation.inbox.member_ids_with_assignment_capacity & team.members.ids
+    AutoAssignment::AgentAssignmentService.new(conversation: conversation, allowed_agent_ids: agent_ids).find_assignee
   end
 
   # Two handoffs in the account can try to create the label at once; the savepoint keeps a caller's transaction usable
