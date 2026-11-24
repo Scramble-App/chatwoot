@@ -33,7 +33,10 @@
 # An entry of the knowledge base of an AI agent bot. Only published entries are given to the model.
 # A blank key gets the next KB-NNN number of the bot: one more than its highest KB- number, at least 3 digits.
 class AgentBotKnowledgeEntry < ApplicationRecord
+  KEY_FORMAT = 'KB-%03d'.freeze
   KEY_NUMBER_SQL = "CAST(SUBSTRING(key FROM '^KB-([0-9]+)$') AS numeric)".freeze
+  # First key of the advisory lock that serializes key numbering; the bot id is the second
+  KEY_LOCK_NAMESPACE = 20_261_124
   SHORT_TEXT_LIMIT = 255
   QUESTION_LIMIT = 2_000
   TEXT_LIMIT = 10_000
@@ -43,16 +46,29 @@ class AgentBotKnowledgeEntry < ApplicationRecord
   has_many :questions, class_name: 'AgentBotKnowledgeQuestion', foreign_key: :knowledge_entry_id,
                        inverse_of: :knowledge_entry, dependent: :delete_all
 
-  enum status: { draft: 0, published: 1, needs_answer: 2 }
+  enum :status, { draft: 0, published: 1, needs_answer: 2 }, validate: true
+
+  normalizes :key, with: ->(key) { key.strip }
 
   before_validation :ensure_account_id
   before_validation :assign_key, if: -> { key.blank? }
 
-  validates :key, presence: true, uniqueness: { scope: :agent_bot_id }
+  validates :key, presence: true, uniqueness: { scope: :agent_bot_id }, format: { without: /\s/ }
   validates :key, :category, :frequency, length: { maximum: SHORT_TEXT_LIMIT }
   validates :question, presence: true, length: { maximum: QUESTION_LIMIT }
   validates :alternative_questions, :short_answer, :answer, :selling_point, length: { maximum: TEXT_LIMIT }
   validate :answer_present_when_published
+
+  # Makes other transactions that number keys of the bot wait until this transaction ends, so call it inside one:
+  # outside a transaction the lock is released right away. A bulk caller locks once, then numbers its new entries
+  # with format(KEY_FORMAT, number) from next_key_number up.
+  def self.lock_keys!(agent_bot_id)
+    connection.execute(sanitize_sql_array(['SELECT pg_advisory_xact_lock(?, ?)', KEY_LOCK_NAMESPACE, agent_bot_id]))
+  end
+
+  def self.next_key_number(agent_bot_id)
+    where(agent_bot_id: agent_bot_id).maximum(Arel.sql(KEY_NUMBER_SQL)).to_i + 1
+  end
 
   private
 
@@ -60,11 +76,12 @@ class AgentBotKnowledgeEntry < ApplicationRecord
     self.account_id ||= agent_bot&.account_id
   end
 
+  # save validates inside its transaction, so the lock holds until the new key is committed
   def assign_key
     return if agent_bot_id.nil?
 
-    last_number = self.class.where(agent_bot_id: agent_bot_id).maximum(Arel.sql(KEY_NUMBER_SQL)).to_i
-    self.key = format('KB-%03d', last_number + 1)
+    self.class.lock_keys!(agent_bot_id)
+    self.key = format(KEY_FORMAT, self.class.next_key_number(agent_bot_id))
   end
 
   def answer_present_when_published

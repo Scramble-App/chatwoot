@@ -8,7 +8,7 @@ RSpec.describe AiAgents::Settings do
   shared_examples 'the default settings' do
     it 'returns the defaults' do
       expect(settings.model).to be_nil
-      expect(settings.reasoning_effort).to eq('low')
+      expect(settings.reasoning_effort).to eq('medium')
       expect(settings.tone_of_voice).to eq(AiAgents::Defaults::TONE_OF_VOICE)
       expect(settings.instructions).to eq(AiAgents::Defaults::INSTRUCTIONS)
       expect(settings.handoff_team_id).to be_nil
@@ -69,7 +69,7 @@ RSpec.describe AiAgents::Settings do
   describe '.defaults' do
     it 'exposes the defaults for the API, without the model of the OpenAI integration' do
       expect(described_class.defaults).to eq(
-        reasoning_effort: 'low',
+        reasoning_effort: 'medium',
         tone_of_voice: AiAgents::Defaults::TONE_OF_VOICE,
         instructions: AiAgents::Defaults::INSTRUCTIONS,
         max_replies_per_conversation: 30,
