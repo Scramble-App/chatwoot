@@ -338,4 +338,77 @@ RSpec.describe 'Agent Bot API', type: :request do
       end
     end
   end
+
+  describe 'GET /api/v1/accounts/{account.id}/agent_bots/ai_agent_defaults' do
+    let(:url) { "/api/v1/accounts/#{account.id}/agent_bots/ai_agent_defaults" }
+
+    it 'returns the defaults of an AI agent bot with the model of the OpenAI integration' do
+      allow(Integrations::Openai::KeyValidator).to receive(:valid?).and_return(true)
+      create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-test', 'translation_model' => 'gpt-test-model' })
+
+      get url, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body).to eq(
+        'reasoning_effort' => 'low', 'tone_of_voice' => AiAgents::Defaults::TONE_OF_VOICE, 'instructions' => AiAgents::Defaults::INSTRUCTIONS,
+        'max_replies_per_conversation' => 30, 'fallback_message' => AiAgents::Defaults::FALLBACK_MESSAGE, 'model' => 'gpt-test-model'
+      )
+    end
+
+    it 'returns no model without an OpenAI integration' do
+      get url, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body).to include('model' => nil, 'reasoning_effort' => 'low')
+    end
+
+    it 'rejects an agent' do
+      get url, headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe 'GET /api/v1/accounts/{account.id}/agent_bots/knowledge_bases' do
+    let(:url) { "/api/v1/accounts/#{account.id}/agent_bots/knowledge_bases" }
+    let(:team) { create(:team, account: account) }
+    let!(:team_bot) { create(:agent_bot, :ai_agent, account: account, name: 'Founders', bot_config: { handoff_team_id: team.id }) }
+    let!(:other_bot) { create(:agent_bot, :ai_agent, account: account, name: 'Other') }
+
+    before do
+      create_list(:agent_bot_knowledge_entry, 2, agent_bot: team_bot, status: :needs_answer, answer: nil, short_answer: nil)
+      create(:agent_bot_knowledge_entry, agent_bot: team_bot)
+      create(:agent_bot, :ai_agent)
+    end
+
+    it 'returns every AI agent bot of the account to an administrator' do
+      get url, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body).to eq(
+        [
+          { 'id' => team_bot.id, 'name' => 'Founders', 'thumbnail' => '', 'needs_answer_count' => 2 },
+          { 'id' => other_bot.id, 'name' => 'Other', 'thumbnail' => '', 'needs_answer_count' => 0 }
+        ]
+      )
+    end
+
+    it 'returns the bots of the handoff teams of an agent' do
+      create(:team_member, team: team, user: agent)
+
+      get url, headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body.pluck('id')).to eq([team_bot.id])
+    end
+
+    it 'returns no bots to an agent outside the handoff teams' do
+      create(:team_member, team: create(:team, account: account), user: agent)
+
+      get url, headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body).to eq([])
+    end
+  end
 end

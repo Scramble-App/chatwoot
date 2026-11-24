@@ -530,6 +530,18 @@ en:
 
       Transcript:
       %{format_messages}
+  agent_bot_knowledge:
+    invalid_status: 'Status must be one of: %{statuses}'
+    import:
+      file_missing: 'Choose a CSV file to import'
+      file_too_large: 'The file is larger than %{size} MB'
+      invalid_encoding: 'The file must be a CSV file in UTF-8'
+      invalid_csv: 'The file is not a valid CSV file: %{error}'
+      no_columns: 'The file has none of the knowledge base columns: %{headers}'
+      too_many_rows: 'The file has more than %{count} rows'
+      duplicate_key: 'The key %{key} is already in row %{row}'
+    pages:
+      no_text: 'The page has no readable text'
   agent_capacity_policy:
     inbox_already_assigned: 'Inbox has already been assigned to this policy'
   portals:

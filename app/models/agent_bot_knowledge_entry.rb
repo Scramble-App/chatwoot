@@ -45,6 +45,11 @@ class AgentBotKnowledgeEntry < ApplicationRecord
 
   enum status: { draft: 0, published: 1, needs_answer: 2 }
 
+  scope :search, lambda { |query|
+    where('key ILIKE :query OR question ILIKE :query OR short_answer ILIKE :query OR answer ILIKE :query',
+          query: "%#{sanitize_sql_like(query.to_s.strip)}%")
+  }
+
   before_validation :ensure_account_id
   before_validation :assign_key, if: -> { key.blank? }
 

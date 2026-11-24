@@ -1,10 +1,22 @@
 class Api::V1::Accounts::AgentBotsController < Api::V1::Accounts::BaseController
   before_action :current_account
   before_action :check_authorization
-  before_action :agent_bot, except: [:index, :create]
+  before_action :agent_bot, except: [:index, :create, :ai_agent_defaults, :knowledge_bases]
 
   def index
     @agent_bots = AgentBot.accessible_to(Current.account)
+  end
+
+  # A blank setting of an AI agent bot means its default; the model defaults to the one of the OpenAI integration
+  def ai_agent_defaults
+    hook = MessageTranslations::OpenaiSettings.hook_for(Current.account)
+    @defaults = AiAgents::Settings.defaults.merge(model: hook && MessageTranslations::OpenaiSettings.model(hook))
+  end
+
+  # The AI agent bots whose knowledge base the current user may manage
+  def knowledge_bases
+    @agent_bots = Current.account.agent_bots.ai_agent.order(:id).select { |agent_bot| policy(agent_bot).manage_knowledge? }
+    @needs_answer_counts = AgentBotKnowledgeEntry.needs_answer.where(agent_bot_id: @agent_bots.map(&:id)).group(:agent_bot_id).count
   end
 
   def show; end
