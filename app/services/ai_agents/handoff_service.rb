@@ -1,6 +1,7 @@
-# Passes a conversation from the AI agent to the team: sets the handoff team first, so assignment considers it, labels the
-# conversation, leaves a private note for the team and opens the conversation through bot_handoff!. When the knowledge
-# base had no answer, record_unanswered_question then records the question, after the reply is posted.
+# Passes a conversation from the AI agent to the team: leaves a private note for the team and, in one save, sets the
+# handoff team (so assignment considers it), the label and what bot_handoff! sets (waiting_since, status open). The caller
+# sends bot_handoff!'s event with dispatch_event once everything is committed and, when the knowledge base had no answer,
+# records the question with record_unanswered_question.
 class AiAgents::HandoffService
   LABEL = 'ai-handoff'.freeze
   NOTE_QUESTION_LIMIT = 1_000
@@ -15,16 +16,22 @@ class AiAgents::HandoffService
     conversation.reload
     return false unless conversation.pending? && conversation.assignee_id.nil?
 
-    label_title = label.title
     # All or nothing: a half-done handoff can leave the conversation pending with the team, the note or an assignee, where
-    # the AI agent never replies again and nobody is told
+    # the AI agent never replies again and nobody is told. One save of the conversation, as its after_commit callbacks (team
+    # and assignee events, assignment history) run once per transaction and see only the last save's changes.
     ActiveRecord::Base.transaction do
-      assign_team
-      conversation.add_labels([label_title])
       create_note
-      conversation.bot_handoff!
+      conversation.update!(handoff_changes)
     end
     true
+  end
+
+  # bot_handoff!'s event (Reports → Bot, notifications) as bot_handoff! sends it, but only once the handoff is committed: a
+  # handoff that rolls back sends none, and listeners find the conversation open
+  def dispatch_event
+    Rails.configuration.dispatcher.dispatch(Events::Types::CONVERSATION_BOT_HANDOFF, Time.zone.now,
+                                            conversation: conversation, notifiable_assignee_change: conversation.notifiable_assignee_change?,
+                                            changed_attributes: nil, performed_by: Current.executed_by)
   end
 
   def record_unanswered_question
@@ -43,9 +50,13 @@ class AiAgents::HandoffService
     @conversation ||= message.conversation
   end
 
-  def assign_team
+  # What bot_handoff! sets (waiting_since when blank, status open), with the label and the handoff team
+  def handoff_changes
+    changes = { label_list: conversation.label_list | [label.title], status: :open }
+    changes[:waiting_since] = Time.current if conversation.waiting_since.blank?
     team = agent_bot.ai_agent_settings.handoff_team
-    conversation.update!(team: team) if team && conversation.team_id != team.id
+    changes[:team] = team if team && conversation.team_id != team.id
+    changes
   end
 
   # Two handoffs in the account can try to create the label at once; the savepoint keeps a caller's transaction usable

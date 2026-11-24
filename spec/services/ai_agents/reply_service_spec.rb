@@ -110,6 +110,23 @@ RSpec.describe AiAgents::ReplyService do
     expect(note).to include("Email: jane@bigbrand.test\nEmail given in chat: bob@elsewhere.test")
   end
 
+  { identifier: 'user-42', phone_number: '+15550001111' }.each do |attribute, value|
+    it "keeps a contact known by its #{attribute} as it is, and tells the team the email the visitor gave" do
+      customer = create(:contact, account: account, name: 'Jane Doe', email: 'jane@bigbrand.test')
+      contact.update!(attribute => value)
+      stub_openai_responses(openai_tool_calls(['save_contact', { name: nil, company: nil, email: 'jane@bigbrand.test' }]),
+                            openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.' }]),
+                            openai_reply(kind: 'handoff'))
+
+      reply
+
+      expect(conversation.reload.contact).to eq(contact)
+      expect(contact.reload).to have_attributes(:email => nil, attribute => value)
+      expect(customer.reload).to have_attributes(email: 'jane@bigbrand.test', identifier: nil, phone_number: nil)
+      expect(note).to include("Email: unknown\nEmail given in chat: jane@bigbrand.test")
+    end
+  end
+
   it 'keeps a name the contact already has' do
     contact.update!(name: 'Anna Smith')
     stub_openai_responses(openai_tool_calls(['save_contact', { name: 'Ann', company: nil, email: nil }]), openai_reply)
@@ -150,6 +167,36 @@ RSpec.describe AiAgents::ReplyService do
     expect(note).to include('Reason: other')
     expect(conversation.reload).to have_attributes(status: 'open', label_list: ['ai-handoff'])
     expect(bot_messages.last.content).to eq('I have passed you to the team.')
+  end
+
+  it 'hands off in one save, so listeners hear of the team, the assignment and the opening, and of the handoff' do
+    team.update!(allow_auto_assign: true)
+    allow(OnlineStatusTracker).to receive(:get_available_users).and_return(team_member.id.to_s => 'online')
+    stub_openai_responses(openai_reply(reply: 'I have passed you to the team.', kind: 'handoff', language: 'en'))
+
+    perform_enqueued_jobs(only: EventDispatcherJob) { reply }
+
+    expect(conversation.reload).to have_attributes(status: 'open', team: team, assignee: team_member, label_list: ['ai-handoff'])
+    handoff_events = [Events::Types::TEAM_CHANGED, Events::Types::ASSIGNEE_CHANGED, Events::Types::CONVERSATION_OPENED,
+                      Events::Types::CONVERSATION_STATUS_CHANGED, Events::Types::CONVERSATION_BOT_HANDOFF]
+    expect(events.tally.slice(*handoff_events)).to eq(handoff_events.index_with(1))
+    expect(ConversationAssignmentEvent.where(conversation: conversation).pluck(:from_assignee_id, :to_assignee_id)).to eq([[nil, team_member.id]])
+    expect(Notification.where(user: team_member, primary_actor: conversation).pluck(:notification_type)).to include('conversation_assignment')
+    expect(ReportingEvent.where(conversation_id: conversation.id, name: 'conversation_bot_handoff').count).to eq(1)
+  end
+
+  it 'sends the bot handoff event once the handoff and its reply are committed' do
+    baseline = ActiveRecord::Base.connection.open_transactions
+    handoff_transactions = []
+    allow(dispatcher).to receive(:dispatch).and_wrap_original do |original, name, *args|
+      handoff_transactions << ActiveRecord::Base.connection.open_transactions if name == Events::Types::CONVERSATION_BOT_HANDOFF
+      original.call(name, *args)
+    end
+    stub_openai_responses(openai_reply(reply: 'I have passed you to the team.', kind: 'handoff'))
+
+    reply
+
+    expect(handoff_transactions).to eq([baseline])
   end
 
   it 'hands off and posts the fallback message without calling OpenAI when the reply limit is reached' do

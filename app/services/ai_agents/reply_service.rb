@@ -92,8 +92,9 @@ class AiAgents::ReplyService
   end
 
   # An email can merge the visitor into an existing customer, so the contact only gets details it lacks: an email when it
-  # has none, a name when it has a generated one, a company when it has none. The conversation keeps what the visitor gave:
-  # name and company for the prompt, and an email the contact didn't take for the handoff note.
+  # has no email, identifier or phone number, a name when it has a generated one, a company when it has none. The
+  # conversation keeps what the visitor gave: name and company for the prompt, and an email the contact didn't take for the
+  # handoff note.
   def save_contact(details)
     save_email(details['email']) if details['email']
     contact = conversation.contact
@@ -106,12 +107,13 @@ class AiAgents::ReplyService
   end
 
   # Like the widget's email collection: the contact takes the email, or merges into the contact that has it, which keeps its
-  # name. The conversation moves with a merge.
+  # name. The conversation moves with a merge. A contact already known by an identifier or phone number stays as it is: an
+  # email typed in the chat doesn't show the visitor owns it.
   def save_email(email)
-    return if conversation.contact.email.present?
+    contact = conversation.contact
+    return if contact.email.present? || contact.identifier.present? || contact.phone_number.present?
 
-    ContactIdentifyAction.new(contact: conversation.contact, params: { email: email }, retain_original_contact_name: true,
-                              discard_invalid_attrs: true).perform
+    ContactIdentifyAction.new(contact: contact, params: { email: email }, retain_original_contact_name: true, discard_invalid_attrs: true).perform
     conversation.reload
   end
 
@@ -138,7 +140,10 @@ class AiAgents::ReplyService
       unanswered_question: request['unanswered_question'], visitor_question: request['visitor_question'], language: language
     )
     handed_off = ActiveRecord::Base.transaction { handoff.perform && post(content, preserve_waiting_since: true) }
-    handoff.record_unanswered_question if handed_off
+    return unless handed_off
+
+    handoff.dispatch_event
+    handoff.record_unanswered_question
   end
 
   def post(content, preserve_waiting_since: false)

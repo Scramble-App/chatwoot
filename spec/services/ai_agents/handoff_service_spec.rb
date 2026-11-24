@@ -17,21 +17,43 @@ RSpec.describe AiAgents::HandoffService do
     handoff(...).perform
   end
 
-  it 'sets the team, labels the conversation, leaves a note and opens the conversation, in this order' do
-    allow(conversation).to receive(:bot_handoff!).and_wrap_original do |original|
-      expect(conversation.reload.team).to eq(team)
-      expect(conversation.label_list).to eq(['ai-handoff'])
+  it 'leaves a note, then sets the team, the label and the open status in one save' do
+    saves = []
+    allow(conversation).to receive(:update!).and_wrap_original do |original, changes|
       expect(conversation.messages.where(private: true).count).to eq(1)
-      original.call
+      saves << changes
+      original.call(changes)
     end
     allow(dispatcher).to receive(:dispatch).and_call_original
 
     hand_off(reason: 'human_requested', summary: 'Wants to talk to a person.', language: 'de')
 
-    expect(conversation).to have_received(:bot_handoff!)
-    expect(conversation.reload).to have_attributes(status: 'open', team: team, waiting_since: be_present)
-    expect(dispatcher).to have_received(:dispatch).with(Events::Types::CONVERSATION_BOT_HANDOFF, anything, hash_including(conversation: conversation))
+    expect(saves).to match([include(team: team, label_list: ['ai-handoff'], status: :open)])
+    expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
+    # Sent by the caller, once the handoff is committed
+    expect(dispatcher).not_to have_received(:dispatch).with(Events::Types::CONVERSATION_BOT_HANDOFF, any_args)
     expect(account.labels.find_by(title: 'ai-handoff').description).to eq('Conversations the AI agent passed to the team')
+  end
+
+  it 'keeps the time the visitor has been waiting since' do
+    waiting_since = 5.minutes.ago.change(usec: 0)
+    message
+    conversation.update!(waiting_since: waiting_since)
+
+    hand_off(reason: 'other')
+
+    expect(conversation.reload.waiting_since).to eq(waiting_since)
+  end
+
+  it 'starts the wait for the team when the visitor was not waiting, like bot_handoff!' do
+    message
+    conversation.update!(waiting_since: nil)
+
+    freeze_time do
+      hand_off(reason: 'other')
+
+      expect(conversation.reload.waiting_since).to eq(Time.current)
+    end
   end
 
   it 'leaves a private note from the bot with what the team needs' do
@@ -93,12 +115,12 @@ RSpec.describe AiAgents::HandoffService do
   end
 
   it 'hands off all or nothing, so a failed handoff is done again cleanly' do
-    calls = 0
-    allow(conversation).to receive(:bot_handoff!).and_wrap_original do |original|
-      calls += 1
-      raise ActiveRecord::Deadlocked, 'deadlock detected' if calls == 1
-
-      original.call
+    saves = 0
+    allow(conversation).to receive(:update!).and_wrap_original do |original, *arguments|
+      original.call(*arguments).tap do
+        saves += 1
+        raise ActiveRecord::Deadlocked, 'deadlock detected' if saves == 1
+      end
     end
 
     expect { hand_off(reason: 'human_requested') }.to raise_error(ActiveRecord::Deadlocked)
@@ -123,6 +145,21 @@ RSpec.describe AiAgents::HandoffService do
     expect(conversation.reload).to have_attributes(status: 'pending', assignee: agent, team: nil, label_list: [])
     expect(other.reload).to have_attributes(status: 'resolved', label_list: [])
     expect(Message.where(sender: agent_bot)).to be_empty
+  end
+
+  describe '#dispatch_event' do
+    it 'sends the event bot_handoff! sends' do
+      service = handoff(reason: 'human_requested')
+      service.perform
+      allow(dispatcher).to receive(:dispatch)
+
+      service.dispatch_event
+
+      expect(dispatcher).to have_received(:dispatch).with(
+        Events::Types::CONVERSATION_BOT_HANDOFF, anything,
+        conversation: conversation, notifiable_assignee_change: false, changed_attributes: nil, performed_by: nil
+      )
+    end
   end
 
   describe '#record_unanswered_question' do

@@ -186,6 +186,12 @@ RSpec.describe AgentBots::AiAgentReplyJob do
     it 'undoes the handoff when its reply fails to post, so the job runs again cleanly' do
       stub_openai_responses(openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.' }]),
                             openai_reply(reply: 'A colleague will join shortly.', kind: 'handoff'))
+      message
+      events = []
+      allow(Rails.configuration.dispatcher).to receive(:dispatch).and_wrap_original do |original, name, *args|
+        events << name
+        original.call(name, *args)
+      end
       posts = 0
       allow(AiAgents::ReplyService).to receive(:new).and_wrap_original do |original, **arguments|
         original.call(**arguments).tap do |service|
@@ -200,11 +206,14 @@ RSpec.describe AgentBots::AiAgentReplyJob do
 
       expect { perform }.to raise_error(ActiveRecord::StatementInvalid)
       expect(conversation.reload).to have_attributes(status: 'pending', team: nil, label_list: [])
+      # Nothing of the undone handoff reaches listeners: no bot handoff, opening, team change or note
+      expect(events.grep_v(/typing/)).to be_empty
       perform
 
       expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
       expect(conversation.messages.where(sender: agent_bot, private: true).count).to eq(1)
       expect(bot_replies.pluck(:content)).to eq(['A colleague will join shortly.'])
+      expect(events.count(Events::Types::CONVERSATION_BOT_HANDOFF)).to eq(1)
     end
   end
 end
