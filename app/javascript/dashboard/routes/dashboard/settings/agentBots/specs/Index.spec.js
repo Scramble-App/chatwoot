@@ -90,12 +90,16 @@ describe('agent bots Index.vue', () => {
     ).toBe(false);
 
     const aiAgentRow = rowOf(wrapper, 'Assistant');
-    expect(aiAgentRow.find('[data-test-id="agent-bot-pages"]').exists()).toBe(
-      true
-    );
     expect(
-      aiAgentRow.find('[data-test-id="agent-bot-knowledge-base"]').exists()
-    ).toBe(true);
+      aiAgentRow
+        .find('[data-test-id="agent-bot-pages"]')
+        .attributes('aria-label')
+    ).toBe('Website pages');
+    expect(
+      aiAgentRow
+        .find('[data-test-id="agent-bot-knowledge-base"]')
+        .attributes('aria-label')
+    ).toBe('Knowledge base');
   });
 
   it('opens the pages of the bot', async () => {

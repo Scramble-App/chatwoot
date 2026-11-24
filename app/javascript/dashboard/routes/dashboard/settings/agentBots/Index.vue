@@ -211,6 +211,7 @@ onMounted(() => {
                       slate
                       sm
                       data-test-id="agent-bot-pages"
+                      :aria-label="t('AGENT_BOTS.PAGES.BUTTON_TEXT')"
                       @click="openPagesDialog(bot)"
                     />
                     <Button
@@ -219,6 +220,7 @@ onMounted(() => {
                       slate
                       sm
                       data-test-id="agent-bot-knowledge-base"
+                      :aria-label="t('AGENT_BOTS.KNOWLEDGE_BASE.BUTTON_TEXT')"
                       @click="openKnowledgeBase(bot)"
                     />
                   </template>

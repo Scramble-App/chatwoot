@@ -154,6 +154,7 @@
       "DESCRIPTION": "{botName} can open these pages to answer visitors. They are fetched in the background and refreshed daily.",
       "CLOSE": "Close",
       "RELOAD": "Reload list",
+      "RETRY": "Try again",
       "LOADING": "Fetching pages...",
       "EMPTY": "No pages yet. Add the pages the bot may use.",
       "LAST_FETCHED": "Last fetched {time}",

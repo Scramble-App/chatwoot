@@ -47,8 +47,8 @@ const PAGES = [
   },
 ];
 
-const mountDialog = async () => {
-  const wrapper = mount(AgentBotPagesDialog, {
+const createDialog = () =>
+  mount(AgentBotPagesDialog, {
     global: {
       stubs: {
         Dialog: {
@@ -60,12 +60,18 @@ const mountDialog = async () => {
       },
     },
   });
+
+const mountDialog = async () => {
+  const wrapper = createDialog();
   wrapper.vm.open(bot);
   await flushPromises();
   return wrapper;
 };
 
 const pageRows = wrapper => wrapper.findAll('[data-test-id="agent-bot-page"]');
+
+const deleteButtonOf = row =>
+  row.find('[data-test-id="agent-bot-page-delete"]');
 
 const addPage = async (wrapper, url) => {
   await wrapper.find('#agent-bot-page-url').setValue(url);
@@ -178,9 +184,7 @@ describe('AgentBotPagesDialog.vue', () => {
 
   it('removes a page only after the confirmation', async () => {
     const wrapper = await mountDialog();
-    const deleteButton = pageRows(wrapper)[2].find(
-      '[data-test-id="agent-bot-page-delete"] button'
-    );
+    const deleteButton = deleteButtonOf(pageRows(wrapper)[2]);
 
     await deleteButton.trigger('click');
     expect(AgentBotsAPI.deletePage).not.toHaveBeenCalled();
@@ -207,5 +211,140 @@ describe('AgentBotPagesDialog.vue', () => {
 
     expect(pageRows(wrapper)).toHaveLength(1);
     expect(pageRows(wrapper)[0].text()).toContain('Fetched');
+  });
+
+  it('cancels the removal when the button loses focus', async () => {
+    const wrapper = await mountDialog();
+    const deleteButton = deleteButtonOf(pageRows(wrapper)[2]);
+
+    await deleteButton.trigger('click');
+    await deleteButton.trigger('blur');
+    await deleteButton.trigger('click');
+    await flushPromises();
+
+    expect(AgentBotsAPI.deletePage).not.toHaveBeenCalled();
+  });
+
+  it('keeps a page that could not be removed and says why', async () => {
+    AgentBotsAPI.deletePage.mockRejectedValue({
+      response: { data: { error: 'You are not authorized to do this action' } },
+    });
+    const wrapper = await mountDialog();
+    const deleteButton = deleteButtonOf(pageRows(wrapper)[2]);
+
+    await deleteButton.trigger('click');
+    await deleteButton.trigger('click');
+    await flushPromises();
+
+    expect(useAlert).toHaveBeenCalledWith(
+      'You are not authorized to do this action'
+    );
+    expect(pageRows(wrapper)).toHaveLength(3);
+  });
+
+  it('says why a page could not be fetched again', async () => {
+    AgentBotsAPI.refreshPage.mockRejectedValue({
+      response: { data: { error: 'Resource could not be found' } },
+    });
+    const wrapper = await mountDialog();
+
+    await pageRows(wrapper)[0]
+      .find('[data-test-id="agent-bot-page-refresh"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(useAlert).toHaveBeenCalledWith('Resource could not be found');
+    expect(AgentBotsAPI.getPages).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [401, 'You are not authorized to do this action'],
+    [404, 'Resource could not be found'],
+  ])(
+    'shows a page list that failed with %i as an error and retries it',
+    async (status, message) => {
+      AgentBotsAPI.getPages.mockRejectedValueOnce({
+        response: { status, data: { error: message } },
+      });
+      const wrapper = await mountDialog();
+
+      expect(wrapper.find('[role="alert"]').text()).toBe(message);
+      expect(wrapper.text()).not.toContain('No pages yet');
+
+      await wrapper
+        .find('[data-test-id="agent-bot-pages-retry"]')
+        .trigger('click');
+      await flushPromises();
+
+      expect(pageRows(wrapper)).toHaveLength(3);
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    }
+  );
+
+  it('explains a failed page list when the API gives no reason', async () => {
+    AgentBotsAPI.getPages.mockRejectedValueOnce(new Error('Network Error'));
+    const wrapper = await mountDialog();
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Could not load the pages. Please try again.'
+    );
+  });
+
+  it('ignores pages that arrive for a bot that is no longer open', async () => {
+    let resolveFirstBot;
+    AgentBotsAPI.getPages
+      .mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            resolveFirstBot = resolve;
+          })
+      )
+      .mockResolvedValueOnce({ data: [PAGES[1]] });
+    const wrapper = createDialog();
+
+    wrapper.vm.open({ id: 5, name: 'Assistant' });
+    wrapper.vm.open({ id: 6, name: 'Partner bot' });
+    await flushPromises();
+    resolveFirstBot({ data: PAGES });
+    await flushPromises();
+
+    expect(AgentBotsAPI.getPages).toHaveBeenNthCalledWith(2, 6);
+    expect(pageRows(wrapper)).toHaveLength(1);
+    expect(wrapper.text()).toContain('Partner bot can open these pages');
+  });
+
+  it('adds a page once when the form is submitted twice', async () => {
+    AgentBotsAPI.createPage.mockReturnValue(new Promise(() => {}));
+    const wrapper = await mountDialog();
+
+    await wrapper
+      .find('#agent-bot-page-url')
+      .setValue('https://example.com/faq');
+    await wrapper.find('form').trigger('submit');
+    await wrapper.find('form').trigger('submit');
+
+    expect(AgentBotsAPI.createPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels its icon buttons and announces a wrong URL', async () => {
+    const wrapper = await mountDialog();
+    const [row] = pageRows(wrapper);
+
+    expect(
+      row
+        .find('[data-test-id="agent-bot-page-refresh"]')
+        .attributes('aria-label')
+    ).toBe('Fetch again');
+    expect(deleteButtonOf(row).attributes('aria-label')).toBe('Remove page');
+
+    await addPage(wrapper, 'example.com');
+
+    const input = wrapper.find('#agent-bot-page-url');
+    const error = wrapper.find(`#${input.attributes('aria-describedby')}`);
+    expect(input.attributes('aria-invalid')).toBe('true');
+    expect(error.attributes('role')).toBe('alert');
+    expect(error.text()).toBe(
+      'Enter a page URL that starts with http:// or https://'
+    );
   });
 });

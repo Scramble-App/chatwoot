@@ -7,7 +7,6 @@ import { dynamicTime, messageStamp } from 'shared/helpers/timeHelper';
 
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
-import ConfirmButton from 'dashboard/components-next/button/ConfirmButton.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import Label from 'dashboard/components-next/label/Label.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
@@ -24,10 +23,12 @@ const dialogRef = ref(null);
 const bot = ref({});
 const pages = ref([]);
 const isFetching = ref(false);
+const fetchError = ref('');
 const newPageUrl = ref('');
 const newPageUrlError = ref('');
 const isAdding = ref(false);
 const loadingPageIds = ref({});
+const pageIdToDelete = ref(null);
 
 const statusLabels = computed(() => ({
   pending: t('AGENT_BOTS.PAGES.STATUS.PENDING'),
@@ -46,15 +47,25 @@ const isHttpUrl = value => {
 const apiErrorMessage = (error, fallback) =>
   error?.response?.data?.message || error?.response?.data?.error || fallback;
 
+// A response for a bot whose dialog was closed must not land in another bot's dialog
+const isOpenBot = botId => botId === bot.value.id;
+
 const fetchPages = async () => {
+  const botId = bot.value.id;
   isFetching.value = true;
+  fetchError.value = '';
   try {
-    const { data } = await AgentBotsAPI.getPages(bot.value.id);
+    const { data } = await AgentBotsAPI.getPages(botId);
+    if (!isOpenBot(botId)) return;
     pages.value = Array.isArray(data) ? data : data.payload;
   } catch (error) {
-    useAlert(t('AGENT_BOTS.PAGES.API.FETCH_ERROR'));
+    if (!isOpenBot(botId)) return;
+    fetchError.value = apiErrorMessage(
+      error,
+      t('AGENT_BOTS.PAGES.API.FETCH_ERROR')
+    );
   } finally {
-    isFetching.value = false;
+    if (isOpenBot(botId)) isFetching.value = false;
   }
 };
 
@@ -63,40 +74,50 @@ const open = selectedBot => {
   pages.value = [];
   newPageUrl.value = '';
   newPageUrlError.value = '';
+  isAdding.value = false;
+  pageIdToDelete.value = null;
   dialogRef.value.open();
   fetchPages();
 };
 
 const addPage = async () => {
+  if (isAdding.value) return;
+
   const url = newPageUrl.value.trim();
   if (!isHttpUrl(url)) {
     newPageUrlError.value = t('AGENT_BOTS.PAGES.FORM.INVALID_URL');
     return;
   }
 
+  const botId = bot.value.id;
   newPageUrlError.value = '';
   isAdding.value = true;
   try {
-    await AgentBotsAPI.createPage(bot.value.id, url);
+    await AgentBotsAPI.createPage(botId, url);
+    if (!isOpenBot(botId)) return;
     newPageUrl.value = '';
     await fetchPages();
   } catch (error) {
+    if (!isOpenBot(botId)) return;
     newPageUrlError.value = apiErrorMessage(
       error,
       t('AGENT_BOTS.PAGES.API.ADD_ERROR')
     );
   } finally {
-    isAdding.value = false;
+    if (isOpenBot(botId)) isAdding.value = false;
   }
 };
 
 const refreshPage = async page => {
+  const botId = bot.value.id;
   loadingPageIds.value[page.id] = true;
   try {
-    await AgentBotsAPI.refreshPage(bot.value.id, page.id);
+    await AgentBotsAPI.refreshPage(botId, page.id);
+    if (!isOpenBot(botId)) return;
     useAlert(t('AGENT_BOTS.PAGES.REFRESH.SUCCESS_MESSAGE'));
     await fetchPages();
   } catch (error) {
+    if (!isOpenBot(botId)) return;
     useAlert(
       apiErrorMessage(error, t('AGENT_BOTS.PAGES.REFRESH.ERROR_MESSAGE'))
     );
@@ -106,18 +127,31 @@ const refreshPage = async page => {
 };
 
 const deletePage = async page => {
+  const botId = bot.value.id;
   loadingPageIds.value[page.id] = true;
   try {
-    await AgentBotsAPI.deletePage(bot.value.id, page.id);
+    await AgentBotsAPI.deletePage(botId, page.id);
+    if (!isOpenBot(botId)) return;
     pages.value = pages.value.filter(({ id }) => id !== page.id);
     useAlert(t('AGENT_BOTS.PAGES.DELETE.SUCCESS_MESSAGE'));
   } catch (error) {
+    if (!isOpenBot(botId)) return;
     useAlert(
       apiErrorMessage(error, t('AGENT_BOTS.PAGES.DELETE.ERROR_MESSAGE'))
     );
   } finally {
     loadingPageIds.value[page.id] = false;
   }
+};
+
+// The first click asks for confirmation; the second one removes the page
+const onDeleteClick = page => {
+  if (pageIdToDelete.value !== page.id) {
+    pageIdToDelete.value = page.id;
+    return;
+  }
+  pageIdToDelete.value = null;
+  deletePage(page);
 };
 
 defineExpose({ open });
@@ -151,6 +185,10 @@ defineExpose({ open });
               maxlength="2048"
               :placeholder="t('AGENT_BOTS.PAGES.FORM.PLACEHOLDER')"
               :message-type="newPageUrlError ? 'error' : 'info'"
+              :aria-invalid="newPageUrlError ? 'true' : undefined"
+              :aria-describedby="
+                newPageUrlError ? 'agent-bot-page-url-error' : undefined
+              "
             />
           </div>
           <Button
@@ -164,6 +202,8 @@ defineExpose({ open });
         </div>
         <p
           v-if="newPageUrlError"
+          id="agent-bot-page-url-error"
+          role="alert"
           class="mb-0 break-words text-label-small text-n-ruby-9"
         >
           {{ newPageUrlError }}
@@ -171,7 +211,26 @@ defineExpose({ open });
       </form>
 
       <div
-        v-if="isFetching && !pages.length"
+        v-if="fetchError"
+        class="flex flex-col items-center gap-3 py-6 text-center"
+      >
+        <p role="alert" class="mb-0 text-sm break-words text-n-ruby-11">
+          {{ fetchError }}
+        </p>
+        <Button
+          type="button"
+          icon="i-lucide-rotate-cw"
+          faded
+          slate
+          sm
+          data-test-id="agent-bot-pages-retry"
+          :label="t('AGENT_BOTS.PAGES.RETRY')"
+          :is-loading="isFetching"
+          @click="fetchPages"
+        />
+      </div>
+      <div
+        v-else-if="isFetching && !pages.length"
         class="flex items-center justify-center gap-2 py-6 text-sm text-n-slate-11"
       >
         <Spinner :size="16" />
@@ -230,19 +289,31 @@ defineExpose({ open });
                   slate
                   sm
                   data-test-id="agent-bot-page-refresh"
+                  :aria-label="t('AGENT_BOTS.PAGES.REFRESH.BUTTON_TEXT')"
                   :is-loading="loadingPageIds[page.id]"
                   @click="refreshPage(page)"
                 />
-                <ConfirmButton
+                <Button
                   v-tooltip.top="t('AGENT_BOTS.PAGES.DELETE.BUTTON_TEXT')"
+                  type="button"
                   icon="i-lucide-trash-2"
-                  color="slate"
-                  variant="ghost"
                   size="sm"
                   data-test-id="agent-bot-page-delete"
-                  :confirm-label="t('AGENT_BOTS.PAGES.DELETE.CONFIRM')"
+                  :color="pageIdToDelete === page.id ? 'ruby' : 'slate'"
+                  :variant="pageIdToDelete === page.id ? 'faded' : 'ghost'"
+                  :label="
+                    pageIdToDelete === page.id
+                      ? t('AGENT_BOTS.PAGES.DELETE.CONFIRM')
+                      : ''
+                  "
+                  :aria-label="
+                    pageIdToDelete === page.id
+                      ? undefined
+                      : t('AGENT_BOTS.PAGES.DELETE.BUTTON_TEXT')
+                  "
                   :is-loading="loadingPageIds[page.id]"
-                  @click="deletePage(page)"
+                  @click="onDeleteClick(page)"
+                  @blur="pageIdToDelete = null"
                 />
               </div>
             </div>

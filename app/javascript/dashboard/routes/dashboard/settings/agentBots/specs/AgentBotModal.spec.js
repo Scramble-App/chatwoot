@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import AgentBotModal from '../components/AgentBotModal.vue';
 import AgentBotsAPI from 'dashboard/api/agentBots';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
+import { useAlert } from 'dashboard/composables';
 
 vi.mock('dashboard/composables/store');
 vi.mock('dashboard/composables', () => ({ useAlert: vi.fn() }));
@@ -41,10 +42,16 @@ const aiAgentBot = {
     reasoning_effort: 'medium',
     tone_of_voice: 'Short and friendly.',
     instructions: '',
-    handoff_team_id: 2,
-    max_replies_per_conversation: 40,
+    handoff_team_id: '2',
+    max_replies_per_conversation: '40',
     fallback_message: '',
   },
+};
+
+const DialogStub = {
+  template: '<div><slot /></div>',
+  emits: ['close'],
+  methods: { open() {}, close: closeDialog },
 };
 
 const mountModal = (props = {}) =>
@@ -52,10 +59,7 @@ const mountModal = (props = {}) =>
     props,
     global: {
       stubs: {
-        Dialog: {
-          template: '<div><slot /></div>',
-          methods: { open() {}, close: closeDialog },
-        },
+        Dialog: DialogStub,
         Avatar: true,
         AccessToken: { template: '<div class="access-token" />' },
       },
@@ -63,7 +67,7 @@ const mountModal = (props = {}) =>
   });
 
 const chooseAiAgent = async wrapper => {
-  await wrapper.find('#agent-bot-type-ai_agent').trigger('click');
+  await wrapper.find('#agent-bot-type-ai_agent').setChecked();
   await flushPromises();
 };
 
@@ -71,6 +75,9 @@ const submit = async wrapper => {
   await wrapper.find('form').trigger('submit');
   await flushPromises();
 };
+
+const teamSelect = wrapper =>
+  wrapper.find('[data-test-id="bot-handoff-team"] select');
 
 describe('AgentBotModal.vue', () => {
   beforeEach(() => {
@@ -314,7 +321,7 @@ describe('AgentBotModal.vue', () => {
       const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
       await flushPromises();
 
-      await wrapper.find('#agent-bot-type-webhook').trigger('click');
+      await wrapper.find('#agent-bot-type-webhook').setChecked();
       await wrapper.find('#bot-url').setValue('https://example.com/hook');
       await submit(wrapper);
 
@@ -328,6 +335,138 @@ describe('AgentBotModal.vue', () => {
           avatar: null,
         },
       });
+    });
+
+    it('sends the saved settings back as numbers when the API returns strings', async () => {
+      const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
+      await flushPromises();
+
+      await submit(wrapper);
+
+      expect(dispatch).toHaveBeenCalledWith(
+        'agentBots/update',
+        expect.objectContaining({
+          data: expect.objectContaining({
+            bot_config: expect.objectContaining({
+              handoff_team_id: 2,
+              max_replies_per_conversation: 40,
+            }),
+          }),
+        })
+      );
+    });
+
+    describe('when the saved handoff team was deleted', () => {
+      const botWithDeletedTeam = {
+        ...aiAgentBot,
+        bot_config: { ...aiAgentBot.bot_config, handoff_team_id: '99' },
+      };
+      const savedTeamId = () =>
+        dispatch.mock.calls.find(([action]) => action === 'agentBots/update')[1]
+          .data.bot_config.handoff_team_id;
+
+      it('shows and saves None once the teams have loaded', async () => {
+        const wrapper = mountModal({
+          type: 'edit',
+          selectedBot: botWithDeletedTeam,
+        });
+        await flushPromises();
+
+        expect(teamSelect(wrapper).element.value).toBe('');
+
+        await submit(wrapper);
+
+        expect(savedTeamId()).toBeNull();
+      });
+
+      it.each([
+        ['are still loading', () => new Promise(() => {})],
+        ['could not be loaded', () => Promise.reject(new Error('Offline'))],
+      ])('keeps it while the teams %s', async (_, getTeams) => {
+        dispatch.mockImplementation(action =>
+          action === 'teams/get' ? getTeams() : Promise.resolve({})
+        );
+        const wrapper = mountModal({
+          type: 'edit',
+          selectedBot: botWithDeletedTeam,
+        });
+        await flushPromises();
+
+        await submit(wrapper);
+
+        expect(savedTeamId()).toBe(99);
+      });
+    });
+  });
+
+  describe('the form', () => {
+    it('groups the bot types as labelled radios with one name', () => {
+      const wrapper = mountModal();
+      const group = wrapper.find('[role="radiogroup"]');
+
+      expect(
+        wrapper.find(`#${group.attributes('aria-labelledby')}`).text()
+      ).toBe('Bot type');
+      expect(
+        group
+          .findAll('input[type="radio"]')
+          .map(radio => radio.attributes('name'))
+      ).toEqual(['agent-bot-type', 'agent-bot-type']);
+    });
+
+    it('limits the model name to 255 characters', async () => {
+      const wrapper = mountModal();
+
+      await chooseAiAgent(wrapper);
+
+      expect(wrapper.find('#bot-model').attributes('maxlength')).toBe('255');
+    });
+
+    it('shows why the API refused to save the bot', async () => {
+      dispatch.mockImplementation(action =>
+        action === 'agentBots/update'
+          ? Promise.reject(new Error('Bot config has unknown keys: colour'))
+          : Promise.resolve({})
+      );
+      const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
+      await flushPromises();
+
+      await submit(wrapper);
+
+      expect(useAlert).toHaveBeenCalledWith(
+        'Bot config has unknown keys: colour'
+      );
+      expect(closeDialog).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the generic error when the API gives no reason', async () => {
+      dispatch.mockImplementation(action =>
+        action === 'agentBots/create'
+          ? Promise.reject(new Error(''))
+          : Promise.resolve({})
+      );
+      const wrapper = mountModal();
+
+      await wrapper.find('#bot-name').setValue('Support bot');
+      await wrapper.find('#bot-url').setValue('https://example.com/hook');
+      await submit(wrapper);
+
+      expect(useAlert).toHaveBeenCalledWith(
+        'Could not add bot. Please try again later.'
+      );
+    });
+
+    it('drops unsaved edits when it is closed', async () => {
+      const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
+      await flushPromises();
+      await wrapper.find('#bot-name').setValue('Unsaved name');
+      await wrapper.find('#bot-model').setValue('unsaved-model');
+
+      wrapper.findComponent(DialogStub).vm.$emit('close');
+      await flushPromises();
+
+      expect(wrapper.find('#bot-name').element.value).toBe('Assistant');
+      expect(wrapper.find('#bot-model').element.value).toBe('gpt-custom');
     });
   });
 });

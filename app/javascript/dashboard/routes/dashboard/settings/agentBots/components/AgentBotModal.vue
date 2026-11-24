@@ -20,7 +20,6 @@ import NextButton from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
-import RadioCard from 'dashboard/components-next/radioCard/RadioCard.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import AccessToken from 'dashboard/routes/dashboard/settings/profile/AccessToken.vue';
 import AiAgentTextSetting from './AiAgentTextSetting.vue';
@@ -84,6 +83,7 @@ const [showAccessToken, toggleAccessToken] = useToggle();
 const accessToken = ref('');
 const botSecret = ref('');
 const aiAgentDefaults = ref(null);
+const teamsLoaded = ref(false);
 
 const isAiAgent = computed(() => formState.botType === BOT_TYPES.AI_AGENT);
 
@@ -206,16 +206,27 @@ const defaultTexts = computed(() => ({
   fallbackMessage: aiAgentDefaults.value?.fallback_message || '',
 }));
 
-const loadAiAgentOptions = async () => {
-  if (aiAgentDefaults.value) return;
+const loadTeams = async () => {
+  try {
+    await store.dispatch('teams/get');
+    teamsLoaded.value = true;
+  } catch (error) {
+    // Without the team list a saved team can't be checked, so it is kept
+  }
+};
 
-  store.dispatch('teams/get');
+const loadDefaults = async () => {
   try {
     const { data } = await AgentBotsAPI.getAiAgentDefaults();
     aiAgentDefaults.value = data;
   } catch (error) {
     // Without defaults the fields show hints; the next switch to AI agent retries
   }
+};
+
+const loadAiAgentOptions = () => {
+  if (!teamsLoaded.value) loadTeams();
+  if (!aiAgentDefaults.value) loadDefaults();
 };
 
 // A blank text means "use the default", and so does the default text itself:
@@ -341,7 +352,8 @@ const handleSubmit = async () => {
     const errorKey = isCreate
       ? t('AGENT_BOTS.ADD.API.ERROR_MESSAGE')
       : t('AGENT_BOTS.EDIT.API.ERROR_MESSAGE');
-    useAlert(errorKey);
+    // The store passes the API's validation message through
+    useAlert(error?.message || errorKey);
   }
 };
 
@@ -414,6 +426,8 @@ const closeModal = () => {
   accessToken.value = '';
   botSecret.value = '';
   toggleAccessToken(false);
+  // Unsaved edits are dropped, so the next open shows the bot as saved
+  initializeForm();
 };
 
 const onClickClose = () => {
@@ -429,6 +443,18 @@ watch(
     if (value) loadAiAgentOptions();
   },
   { immediate: true }
+);
+
+// A saved team that was deleted would fail every save; once the teams are
+// loaded, it becomes None.
+watch(
+  () => [teamsLoaded.value, teams.value, formState.handoffTeamId],
+  () => {
+    if (!teamsLoaded.value || !formState.handoffTeamId) return;
+    if (!teams.value.some(team => team.id === formState.handoffTeamId)) {
+      formState.handoffTeamId = '';
+    }
+  }
 );
 
 defineExpose({ dialogRef });
@@ -483,19 +509,52 @@ defineExpose({ dialogRef });
         />
 
         <div class="flex flex-col gap-2">
-          <span class="text-sm font-medium text-n-slate-12">
+          <span
+            id="agent-bot-type-label"
+            class="text-sm font-medium text-n-slate-12"
+          >
             {{ $t('AGENT_BOTS.FORM.TYPE.LABEL') }}
           </span>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <RadioCard
+          <div
+            role="radiogroup"
+            aria-labelledby="agent-bot-type-label"
+            class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
+            <label
               v-for="option in botTypeOptions"
-              :id="`agent-bot-type-${option.value}`"
               :key="option.value"
-              :label="option.label"
-              :description="option.description"
-              :is-active="formState.botType === option.value"
-              @select="formState.botType = option.value"
-            />
+              class="flex flex-col gap-2 p-4 cursor-pointer rounded-xl outline outline-1 bg-n-solid-1 transition-all duration-200"
+              :class="
+                formState.botType === option.value
+                  ? 'outline-n-blue-9'
+                  : 'outline-n-weak hover:outline-n-strong'
+              "
+            >
+              <span class="flex items-center justify-between w-full gap-3">
+                <span
+                  :id="`agent-bot-type-${option.value}-label`"
+                  class="text-heading-3 text-n-slate-12"
+                >
+                  {{ option.label }}
+                </span>
+                <input
+                  :id="`agent-bot-type-${option.value}`"
+                  v-model="formState.botType"
+                  type="radio"
+                  name="agent-bot-type"
+                  class="flex-shrink-0 size-4 accent-n-blue-9"
+                  :value="option.value"
+                  :aria-labelledby="`agent-bot-type-${option.value}-label`"
+                  :aria-describedby="`agent-bot-type-${option.value}-description`"
+                />
+              </span>
+              <span
+                :id="`agent-bot-type-${option.value}-description`"
+                class="text-body-main text-n-slate-11"
+              >
+                {{ option.description }}
+              </span>
+            </label>
           </div>
         </div>
 
@@ -515,6 +574,7 @@ defineExpose({ dialogRef });
             <Input
               id="bot-model"
               v-model="formState.model"
+              maxlength="255"
               :label="$t('AGENT_BOTS.FORM.AI_AGENT.MODEL.LABEL')"
               :placeholder="modelPlaceholder"
             />
