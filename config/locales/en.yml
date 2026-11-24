@@ -31,6 +31,26 @@
 
 en:
   hello: 'Hello world'
+  ai_agents:
+    handoff:
+      label_description: 'Conversations the AI agent passed to the team'
+      unknown: 'unknown'
+      note:
+        title: 'The AI agent passed this conversation to the team.'
+        reason: 'Reason: %{reason}'
+        question: 'Question: %{question}'
+        company: 'Company: %{company}'
+        email: 'Email: %{email}'
+        given_email: 'Email given in chat: %{given_email}'
+        language: 'Language: %{language}'
+        summary: 'Summary: %{summary}'
+      reasons:
+        no_answer: 'no confirmed answer in the knowledge base'
+        human_requested: 'the visitor asked for a person'
+        other: 'other'
+        limit: 'the reply limit of the conversation was reached'
+        error: 'the AI agent could not reply (OpenAI error)'
+        ungrounded: 'the reply of the AI agent was not backed by the knowledge base'
   ai_generations:
     generic_error: 'Failed to generate. Please try again.'
     stale: 'Generation timed out. Please try again.'
