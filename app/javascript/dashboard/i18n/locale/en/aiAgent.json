@@ -1,0 +1,118 @@
+{
+  "AI_AGENT": {
+    "SIDEBAR_TITLE": "AI agent",
+    "INDEX": {
+      "EMPTY_TITLE": "No knowledge bases to manage",
+      "EMPTY_DESCRIPTION": "Administrators and members of an AI agent's handoff team manage its knowledge base. AI agents are set up in Settings → Bots."
+    },
+    "KNOWLEDGE": {
+      "TITLE": "Knowledge base",
+      "SWITCH_BOT": "Switch AI agent",
+      "NO_ACCESS": {
+        "TITLE": "You can't open this knowledge base",
+        "DESCRIPTION": "Only administrators and members of the AI agent's handoff team can manage it. The AI agent may also have been removed."
+      },
+      "ACTIONS": {
+        "NEW_ENTRY": "New entry",
+        "IMPORT": "Import",
+        "EXPORT": "Export",
+        "DELETE": "Delete entry"
+      },
+      "FILTERS": {
+        "STATUS_LABEL": "Filter by status",
+        "ALL": "All",
+        "SEARCH_PLACEHOLDER": "Search keys, questions and answers",
+        "ALL_CATEGORIES": "All categories",
+        "CATEGORY_SEARCH_PLACEHOLDER": "Search categories"
+      },
+      "STATUS": {
+        "PUBLISHED": "Published",
+        "DRAFT": "Draft",
+        "NEEDS_ANSWER": "Needs answer"
+      },
+      "LIST": {
+        "ASKED_COUNT": "Asked {count} time | Asked {count} times",
+        "ASKED_COUNT_WITH_LAST": "Asked {count} time, last {time} | Asked {count} times, last {time}",
+        "EMPTY_TITLE": "No entries yet",
+        "EMPTY_DESCRIPTION": "Add the first entry or import the team's CSV file.",
+        "NO_RESULTS_TITLE": "No matching entries",
+        "NO_RESULTS_DESCRIPTION": "Try another search, status or category.",
+        "FETCH_ERROR": "Could not load the knowledge base. Please try again."
+      },
+      "PAGINATION_FOOTER": {
+        "SHOWING": "Showing {startItem} - {endItem} of {totalItems} entry | Showing {startItem} - {endItem} of {totalItems} entries"
+      },
+      "FORM": {
+        "CREATE_TITLE": "New entry",
+        "EDIT_TITLE": "Edit {key}",
+        "SAVE": "Save",
+        "KEY": {
+          "LABEL": "Key",
+          "PLACEHOLDER": "Assigned automatically when blank"
+        },
+        "CATEGORY": {
+          "LABEL": "Category",
+          "PLACEHOLDER": "For example, Pricing"
+        },
+        "FREQUENCY": {
+          "LABEL": "Frequency",
+          "PLACEHOLDER": "Frequent, Occasional or Rare"
+        },
+        "STATUS": {
+          "LABEL": "Status"
+        },
+        "QUESTION": {
+          "LABEL": "Question",
+          "PLACEHOLDER": "The question as a founder would ask it"
+        },
+        "ALTERNATIVE_QUESTIONS": {
+          "LABEL": "Alternative questions",
+          "PLACEHOLDER": "Other ways founders ask it, one per line"
+        },
+        "SHORT_ANSWER": {
+          "LABEL": "Short answer",
+          "PLACEHOLDER": "The answer in a sentence or two"
+        },
+        "ANSWER": {
+          "LABEL": "Full answer",
+          "PLACEHOLDER": "The detailed answer"
+        },
+        "SELLING_POINT": {
+          "LABEL": "Selling point",
+          "PLACEHOLDER": "Why this helps the founder decide"
+        },
+        "PUBLISH_HINT": "A published entry needs a short or a full answer.",
+        "QUESTIONS": {
+          "TITLE": "Latest customer wordings",
+          "OPEN_CONVERSATION": "Conversation #{id}"
+        },
+        "CREATE_SUCCESS": "Entry added",
+        "UPDATE_SUCCESS": "Entry saved",
+        "SAVE_ERROR": "Could not save the entry. Please try again."
+      },
+      "DELETE": {
+        "TITLE": "Delete {key}?",
+        "DESCRIPTION": "The AI agent stops using this entry right away. This can't be undone.",
+        "CONFIRM": "Delete",
+        "SUCCESS": "Entry deleted",
+        "ERROR": "Could not delete the entry. Please try again."
+      },
+      "IMPORT": {
+        "TITLE": "Import entries",
+        "DESCRIPTION": "Upload a CSV file with the same columns as the export. Entries with a known ID are updated, the rest are added.",
+        "CHOOSE_FILE": "Choose CSV file",
+        "CHOOSE_ANOTHER": "Choose another file",
+        "CHECKING": "Checking the file…",
+        "CREATED": "New entries",
+        "UPDATED": "Updated entries",
+        "ERRORS_TITLE": "{count} row needs fixing. Fix the file and choose it again. | {count} rows need fixing. Fix the file and choose it again.",
+        "ROW_ERROR": "Row {row}: {message}",
+        "NOTHING_TO_IMPORT": "The file has no entries to import.",
+        "CONFIRM": "Import",
+        "SUCCESS": "Import finished: {created} added, {updated} updated",
+        "ERROR": "Could not check the file. Please try again."
+      },
+      "EXPORT_ERROR": "Could not export the knowledge base. Please try again."
+    }
+  }
+}

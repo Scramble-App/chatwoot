@@ -162,6 +162,9 @@ const contactCustomViews = useMapGetter('customViews/getContactCustomViews');
 const conversationCustomViews = useMapGetter(
   'customViews/getConversationCustomViews'
 );
+const aiAgentKnowledgeBases = useMapGetter(
+  'aiAgentKnowledge/getKnowledgeBases'
+);
 
 onMounted(() => {
   store.dispatch('labels/get');
@@ -171,6 +174,7 @@ onMounted(() => {
   store.dispatch('attributes/get');
   store.dispatch('customViews/get', 'conversation');
   store.dispatch('customViews/get', 'contact');
+  store.dispatch('aiAgentKnowledge/fetchKnowledgeBases');
 });
 
 const sortedInboxes = computed(() =>
@@ -310,6 +314,20 @@ const menuItems = computed(() => {
         },
       ],
     },
+    // Only users who may manage an AI agent's knowledge base get the list
+    ...(aiAgentKnowledgeBases.value.length
+      ? [
+          {
+            name: 'AI Agent',
+            label: t('AI_AGENT.SIDEBAR_TITLE'),
+            icon: 'i-lucide-bot',
+            to: accountScopedRoute('ai_agent_knowledge', {
+              botId: aiAgentKnowledgeBases.value[0].id,
+            }),
+            activeOn: ['ai_agent_index', 'ai_agent_knowledge'],
+          },
+        ]
+      : []),
     {
       name: 'Contacts',
       label: t('SIDEBAR.CONTACTS'),
