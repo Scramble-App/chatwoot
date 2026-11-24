@@ -39,7 +39,11 @@ class AgentBotListener < BaseListener
     return unless message.webhook_sendable?
 
     method_name = __method__.to_s
-    agent_bots_for(inbox, message.conversation).each { |agent_bot| process_message_event(method_name, agent_bot, message, event) }
+    agent_bots_for(inbox, message.conversation).each do |agent_bot|
+      next enqueue_ai_agent_reply(agent_bot, message) if agent_bot.ai_agent?
+
+      process_message_event(method_name, agent_bot, message, event)
+    end
   end
 
   def message_updated(event)
@@ -76,13 +80,22 @@ class AgentBotListener < BaseListener
     inbox.agent_bot
   end
 
+  # Only visitors' public messages get a reply
+  def enqueue_ai_agent_reply(agent_bot, message)
+    return unless message.incoming? && !message.private? && message.sender_type == 'Contact'
+
+    AgentBots::AiAgentReplyJob.perform_later(agent_bot.id, message.id)
+  end
+
   def process_message_event(method_name, agent_bot, message, _event)
     # Only webhook bots are supported
     payload = message.webhook_data.merge(event: method_name)
     process_webhook_bot_event(agent_bot, payload)
   end
 
+  # Only webhook bots get events: a bot switched to ai_agent can still have its old outgoing_url
   def process_webhook_bot_event(agent_bot, payload)
+    return unless agent_bot.webhook?
     return if agent_bot.outgoing_url.blank?
 
     AgentBots::WebhookJob.perform_later(agent_bot.outgoing_url, payload, :agent_bot_webhook,

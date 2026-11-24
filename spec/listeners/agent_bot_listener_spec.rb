@@ -184,4 +184,54 @@ describe AgentBotListener do
       end
     end
   end
+
+  describe 'AI agent bots' do
+    # A bot switched from webhook to ai_agent can keep its old URL
+    let(:ai_agent_bot) { create(:agent_bot, :ai_agent, account: account, outgoing_url: 'https://example.com/old-webhook') }
+    let(:contact) { conversation.contact }
+
+    def message_event(name = 'message.created', **attributes)
+      message = create(:message, account: account, inbox: inbox, conversation: conversation, sender: contact, **attributes)
+      Events::Base.new(name, Time.zone.now, message: message)
+    end
+
+    before do
+      create(:agent_bot_inbox, inbox: inbox, agent_bot: ai_agent_bot)
+      allow(AgentBots::WebhookJob).to receive(:perform_later)
+    end
+
+    it 'enqueues a reply to an incoming visitor message instead of a webhook' do
+      event = message_event
+
+      expect { listener.message_created(event) }.to have_enqueued_job(AgentBots::AiAgentReplyJob)
+        .with(ai_agent_bot.id, event.data[:message].id).on_queue('high')
+      expect(AgentBots::WebhookJob).not_to have_received(:perform_later)
+    end
+
+    it 'enqueues a reply as the bot assigned to the conversation' do
+      inbox.agent_bot_inbox.destroy!
+      conversation.update!(assignee_agent_bot: ai_agent_bot, assignee: nil)
+      event = message_event
+
+      expect { listener.message_created(event) }.to have_enqueued_job(AgentBots::AiAgentReplyJob).with(ai_agent_bot.id, event.data[:message].id)
+    end
+
+    it 'does not reply to private notes, outgoing messages or messages of other senders' do
+      events = [
+        message_event(private: true),
+        message_event(message_type: :outgoing, sender: user),
+        message_event(sender: user)
+      ]
+
+      expect { events.each { |event| listener.message_created(event) } }.not_to have_enqueued_job(AgentBots::AiAgentReplyJob)
+    end
+
+    it 'sends no webhook events' do
+      listener.message_updated(message_event('message.updated'))
+      listener.conversation_opened(Events::Base.new('conversation.opened', Time.zone.now, conversation: conversation))
+      listener.conversation_updated(Events::Base.new('conversation.updated', Time.zone.now, conversation: conversation))
+
+      expect(AgentBots::WebhookJob).not_to have_received(:perform_later)
+    end
+  end
 end
