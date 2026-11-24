@@ -49,6 +49,14 @@ class AgentBotKnowledgeEntry < ApplicationRecord
   enum :status, { draft: 0, published: 1, needs_answer: 2 }, validate: true
 
   normalizes :key, with: ->(key) { key.strip }
+  # Trimmed, and nil when blank, so the API and the CSV import store the same texts
+  normalizes :category, :frequency, :question, :alternative_questions, :short_answer, :answer, :selling_point,
+             with: ->(text) { text.strip.presence }
+
+  scope :search, lambda { |query|
+    where('key ILIKE :query OR question ILIKE :query OR short_answer ILIKE :query OR answer ILIKE :query',
+          query: "%#{sanitize_sql_like(query.to_s.strip)}%")
+  }
 
   before_validation :ensure_account_id
   before_validation :assign_key, if: -> { key.blank? }

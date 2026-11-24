@@ -59,6 +59,17 @@ RSpec.describe AgentBotKnowledgeEntry do
 
       expect(entry.account).to eq(agent_bot.account)
     end
+
+    it 'trims the texts and stores blank ones as nil' do
+      entry = create(:agent_bot_knowledge_entry, agent_bot: agent_bot, category: " Pricing \n", frequency: '  ', question: "\nAre there fees?\n",
+                                                 alternative_questions: "Any fees?\nIs it free?\n\n", short_answer: ' No. ',
+                                                 answer: "First line.\n\nSecond line.\n", selling_point: '')
+
+      expect(entry.reload).to have_attributes(
+        category: 'Pricing', frequency: nil, question: 'Are there fees?', alternative_questions: "Any fees?\nIs it free?",
+        short_answer: 'No.', answer: "First line.\n\nSecond line.", selling_point: nil
+      )
+    end
   end
 
   describe 'key' do
