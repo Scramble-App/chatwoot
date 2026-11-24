@@ -19,7 +19,8 @@ class AgentBotPages::FetchService
     raise Error, I18n.t('agent_bot_knowledge.pages.no_text') if content.blank?
   rescue StandardError => e
     Rails.logger.info("AgentBotPages::FetchService failed for page #{page.id}: #{e.class} #{e.message}")
-    page.update!(status: :failed, error_message: e.message.truncate(ERROR_LIMIT))
+    # A status text or content type of the response can bring bytes that are not UTF-8
+    page.update!(status: :failed, error_message: e.message.dup.force_encoding(Encoding::UTF_8).scrub.truncate(ERROR_LIMIT))
   else
     page.update!(title: title, content: content, status: :fetched, fetched_at: Time.current, error_message: nil)
   end

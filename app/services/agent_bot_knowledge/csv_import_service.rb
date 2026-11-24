@@ -34,16 +34,16 @@ class AgentBotKnowledge::CsvImportService
     { created: @entries.count(&:new_record?), updated: @entries.count { |entry| entry.persisted? && entry.changed? }, errors: errors }
   end
 
+  # Reads row by row and stops past MAX_ROWS rows, blank rows included, so a large file is never loaded whole
   def parse_rows
     content = read_content
-    header, *lines = CSV.parse(content, col_sep: column_separator(content))
-    columns = columns_for(header)
-    rows = lines.each_with_index.filter_map do |cells, index|
-      [index + 2, columns.transform_values { |position| clean(cells[position]) }] unless cells.all?(&:blank?)
-    end
-    raise Error, I18n.t('agent_bot_knowledge.import.too_many_rows', count: MAX_ROWS) if rows.size > MAX_ROWS
+    csv = CSV.new(content, col_sep: column_separator(content))
+    columns = columns_for(csv.shift)
+    csv.each.with_index(2).filter_map do |cells, row_number|
+      raise Error, I18n.t('agent_bot_knowledge.import.too_many_rows', count: MAX_ROWS) if row_number > MAX_ROWS + 1
 
-    rows
+      [row_number, columns.transform_values { |position| clean(cells[position]) }] unless cells.all?(&:blank?)
+    end
   rescue CSV::MalformedCSVError => e
     raise Error, I18n.t('agent_bot_knowledge.import.invalid_csv', error: e.message)
   end
@@ -129,7 +129,8 @@ class AgentBotKnowledge::CsvImportService
     end
   end
 
+  # The entries were validated moments ago in this transaction, under the key lock
   def save
-    @entries.each { |entry| entry.save! if entry.changed? }
+    @entries.each { |entry| entry.save!(validate: false) if entry.changed? }
   end
 end

@@ -15,7 +15,7 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
     entries = searched_entries
     @status_counts = status_counts(entries)
     entries = entries.where(status: params[:status]) if AgentBotKnowledgeEntry.statuses.key?(params[:status])
-    @categories = @agent_bot.knowledge_entries.where.not(category: [nil, '']).distinct.order(:category).pluck(:category)
+    @categories = @agent_bot.knowledge_entries.where.not(category: nil).distinct.order(:category).pluck(:category)
     @knowledge_entries = entries.order(SORT_ORDERS.fetch(params[:sort].to_s, SORT_ORDERS['key'])).page(params[:page]).per(RESULTS_PER_PAGE)
   end
 
@@ -27,8 +27,9 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
     @knowledge_entry = @agent_bot.knowledge_entries.create!(permitted_params)
   end
 
+  # A blank key keeps the key of the entry; on create it gets the next KB- number
   def update
-    @knowledge_entry.update!(permitted_params)
+    @knowledge_entry.update!(params[:key].blank? ? permitted_params.except(:key) : permitted_params)
   end
 
   def destroy
@@ -71,9 +72,7 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
     AgentBotKnowledgeEntry.statuses.keys.index_with { |status| counts.fetch(status, 0) }
   end
 
-  # Blank fields are stored as nil, as the CSV import stores them, so a blank key gets the next KB- number
   def permitted_params
     params.permit(:key, :category, :frequency, :question, :alternative_questions, :short_answer, :answer, :selling_point, :status)
-          .transform_values(&:presence)
   end
 end

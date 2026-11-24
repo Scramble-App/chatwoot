@@ -257,6 +257,15 @@ RSpec.describe 'Agent bot knowledge entries API', type: :request do
       expect(response.parsed_body).to include('id' => entry.id, 'answer' => 'Yes, from the UK too.', 'status' => 'published')
       expect(entry.reload).to have_attributes(status: 'published', category: nil)
     end
+
+    it 'keeps the key of the entry when the key is blank' do
+      entry = create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'PRICING-1')
+
+      patch "#{entries_url}/#{entry.id}", headers: admin.create_new_auth_token, params: { key: '', question: 'Changed?' }, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(entry.reload).to have_attributes(key: 'PRICING-1', question: 'Changed?')
+    end
   end
 
   describe 'DELETE /knowledge_entries/:id' do
@@ -332,6 +341,19 @@ RSpec.describe 'Agent bot knowledge entries API', type: :request do
       body = response.body.dup.force_encoding(Encoding::UTF_8)
       expect(body).to start_with("\uFEFFID,Категория,Частота,Вопрос,")
       expect(CSV.parse(body.delete_prefix("\uFEFF"))[1]).to eq(['KB-001', nil, nil, 'Are there fees?', nil, 'No.', nil, nil, 'published'])
+    end
+
+    it 'exports entries saved with surrounding spaces so that importing the file changes nothing' do
+      headers = admin.create_new_auth_token
+      post entries_url, headers: headers, as: :json,
+                        params: { key: '', category: ' Pricing ', question: "Are there fees?\n", short_answer: "No.\n\n", answer: ' ',
+                                  status: 'published' }
+      get "#{entries_url}/export", headers: headers
+      exported = response.body.dup.force_encoding(Encoding::UTF_8)
+
+      post "#{entries_url}/import", headers: headers, params: { file: csv_file(exported), dry_run: 'true' }
+
+      expect(response.parsed_body).to eq('created' => 0, 'updated' => 0, 'errors' => [])
     end
   end
 end

@@ -117,6 +117,12 @@ RSpec.describe AgentBotPages::FetchService do
       expect(page.error_message).to be_present
     end
 
+    it 'saves an error message that is not UTF-8' do
+      stub_request(:get, url).to_return(status: [500, "Fehler \xFF".b])
+
+      expect(fetch).to have_attributes(status: 'failed', error_message: "500 Fehler \uFFFD", content: 'Old text.')
+    end
+
     it 'cuts a long error message' do
       stub_request(:get, url).to_return(status: [500, 'e' * 2_000])
 

@@ -161,6 +161,18 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect(AgentBotKnowledgeEntry).to have_received(:next_key_number).with(agent_bot.id).once.ordered
       expect(entries.pluck(:key)).to eq(%w[KB-001 KB-002])
     end
+
+    it 'checks the uniqueness of each new key once' do
+      key_checks = []
+      count_key_checks = lambda do |*, payload|
+        key_checks << payload[:sql] if payload[:sql].start_with?('SELECT 1 AS one FROM "agent_bot_knowledge_entries"')
+      end
+
+      ActiveSupport::Notifications.subscribed(count_key_checks, 'sql.active_record') { import("Вопрос\nFirst?\nSecond?\nThird?\n") }
+
+      expect(key_checks.size).to eq(3)
+      expect(entries.count).to eq(3)
+    end
   end
 
   describe 'invalid rows' do
@@ -204,6 +216,13 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
 
       expect(import(AgentBotKnowledge::CsvExportService.new(agent_bot: agent_bot).perform)).to eq(created: 0, updated: 0, errors: [])
     end
+
+    it 'finds no changes in an export of entries saved with surrounding spaces' do
+      create(:agent_bot_knowledge_entry, agent_bot: agent_bot, category: ' Pricing ', question: "Are there fees?\n",
+                                         answer: "No fees.\n\n", selling_point: ' ', frequency: '')
+
+      expect(import(AgentBotKnowledge::CsvExportService.new(agent_bot: agent_bot).perform)).to eq(created: 0, updated: 0, errors: [])
+    end
   end
 
   describe 'file errors' do
@@ -219,8 +238,15 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
         .to raise_error(described_class::Error, 'The file is larger than 5 MB')
     end
 
-    it 'rejects more than 5,000 rows' do
-      expect { import("Вопрос\n#{"Question?\n" * 5_001}") }.to raise_error(described_class::Error, 'The file has more than 5000 rows')
+    it 'rejects more than 5,000 rows before it reads the rest of the file' do
+      expect { import("Вопрос\n#{"Question?\n" * 5_001}\"Unclosed\n") }.to raise_error(described_class::Error, 'The file has more than 5000 rows')
+    end
+
+    it 'counts the blank rows towards the row limit' do
+      stub_const("#{described_class}::MAX_ROWS", 3)
+
+      expect(import("Вопрос\nFirst?\n\nSecond?\n", dry_run: true)).to include(created: 2)
+      expect { import("Вопрос\nFirst?\n\n,\nSecond?\n", dry_run: true) }.to raise_error(described_class::Error, 'The file has more than 3 rows')
     end
 
     it 'rejects a file that is not UTF-8' do
