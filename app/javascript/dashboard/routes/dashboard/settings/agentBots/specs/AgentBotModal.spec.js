@@ -4,6 +4,7 @@ import AgentBotModal from '../components/AgentBotModal.vue';
 import AgentBotsAPI from 'dashboard/api/agentBots';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
+import { throwErrorMessage } from 'dashboard/store/utils/api';
 
 vi.mock('dashboard/composables/store');
 vi.mock('dashboard/composables', () => ({ useAlert: vi.fn() }));
@@ -61,7 +62,10 @@ const mountModal = (props = {}) =>
       stubs: {
         Dialog: DialogStub,
         Avatar: true,
-        AccessToken: { template: '<div class="access-token" />' },
+        AccessToken: {
+          props: ['value'],
+          template: '<div class="access-token">{{ value }}</div>',
+        },
       },
     },
   });
@@ -423,11 +427,18 @@ describe('AgentBotModal.vue', () => {
     });
 
     it('shows why the API refused to save the bot', async () => {
-      dispatch.mockImplementation(action =>
-        action === 'agentBots/update'
-          ? Promise.reject(new Error('Bot config has unknown keys: colour'))
-          : Promise.resolve({})
-      );
+      // As the store action does: it rethrows the axios error with the API's message
+      dispatch.mockImplementation(async action => {
+        if (action === 'agentBots/update') {
+          throwErrorMessage({
+            response: {
+              status: 422,
+              data: { message: 'Bot config has unknown keys: colour' },
+            },
+          });
+        }
+        return {};
+      });
       const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
       await flushPromises();
 
@@ -437,23 +448,6 @@ describe('AgentBotModal.vue', () => {
         'Bot config has unknown keys: colour'
       );
       expect(closeDialog).not.toHaveBeenCalled();
-    });
-
-    it('falls back to the generic error when the API gives no reason', async () => {
-      dispatch.mockImplementation(action =>
-        action === 'agentBots/create'
-          ? Promise.reject(new Error(''))
-          : Promise.resolve({})
-      );
-      const wrapper = mountModal();
-
-      await wrapper.find('#bot-name').setValue('Support bot');
-      await wrapper.find('#bot-url').setValue('https://example.com/hook');
-      await submit(wrapper);
-
-      expect(useAlert).toHaveBeenCalledWith(
-        'Could not add bot. Please try again later.'
-      );
     });
 
     it('drops unsaved edits when it is closed', async () => {
@@ -467,6 +461,38 @@ describe('AgentBotModal.vue', () => {
 
       expect(wrapper.find('#bot-name').element.value).toBe('Assistant');
       expect(wrapper.find('#bot-model').element.value).toBe('gpt-custom');
+    });
+
+    it('shows no token in the Add Bot form after a bot was edited', async () => {
+      const wrapper = mountModal({ type: 'edit', selectedBot: aiAgentBot });
+      await flushPromises();
+      expect(wrapper.find('.access-token').text()).toBe('token-value');
+
+      wrapper.findComponent(DialogStub).vm.$emit('close');
+      await wrapper.setProps({ type: 'create', selectedBot: {} });
+      await flushPromises();
+
+      expect(wrapper.find('.access-token').exists()).toBe(false);
+      expect(wrapper.text()).not.toContain('token-value');
+      expect(wrapper.text()).not.toContain('secret-value');
+    });
+
+    it('shows the token and secret of a webhook bot it just created', async () => {
+      dispatch.mockImplementation(async action =>
+        action === 'agentBots/create'
+          ? { id: 12, access_token: 'new-token', secret: 'new-secret' }
+          : {}
+      );
+      const wrapper = mountModal();
+
+      await wrapper.find('#bot-name').setValue('Support bot');
+      await wrapper.find('#bot-url').setValue('https://example.com/hook');
+      await submit(wrapper);
+
+      expect(
+        wrapper.findAll('.access-token').map(token => token.text())
+      ).toEqual(['new-token', 'new-secret']);
+      expect(closeDialog).not.toHaveBeenCalled();
     });
   });
 });

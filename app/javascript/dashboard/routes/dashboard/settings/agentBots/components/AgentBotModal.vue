@@ -377,11 +377,14 @@ const initializeForm = () => {
     Object.assign(formState, aiAgentStateFrom(botConfig || {}));
 
     if (props.type === MODAL_TYPES.EDIT) {
-      if (botAccessToken) accessToken.value = botAccessToken;
-      if (botSecretValue) botSecret.value = botSecretValue;
+      accessToken.value = botAccessToken || '';
+      botSecret.value = botSecretValue || '';
     }
   } else {
     resetForm();
+    // A new bot has no token yet; never show the one of a bot edited before
+    accessToken.value = '';
+    botSecret.value = '';
   }
 };
 
