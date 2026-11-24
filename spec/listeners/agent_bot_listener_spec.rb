@@ -241,14 +241,22 @@ describe AgentBotListener do
       expect { events.each { |event| listener.message_created(event) } }.not_to have_enqueued_job(AgentBots::AiAgentReplyJob)
     end
 
-    it 'opens a pending conversation when a team member answers the visitor, so the AI agent stops' do
+    it 'opens a pending conversation, assigned to the inbox member who answered the visitor, so the AI agent stops' do
+      create(:inbox_member, inbox: inbox, user: user)
       conversation.update!(status: :pending, assignee: nil)
 
       listener.message_created(message_event(message_type: :outgoing, sender: user))
 
-      expect(conversation.reload.status).to eq('open')
-      expect(conversation.label_list).to be_empty
+      expect(conversation.reload).to have_attributes(status: 'open', assignee: user, label_list: [])
       expect(conversation.messages.where(private: true)).to be_empty
+    end
+
+    it 'opens a pending conversation without assigning someone who answered from outside the inbox' do
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user))
+
+      expect(conversation.reload).to have_attributes(status: 'open', assignee: nil)
     end
 
     it 'keeps the conversation pending for private notes and messages of the bot' do

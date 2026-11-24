@@ -7,8 +7,15 @@ class AiAgents::UnansweredRecorder
   # The visitor messages searched for the wording, at most as many as the prompt history holds
   RECENT_MESSAGES = AiAgents::ConversationContext::HISTORY_LIMIT
   EMAIL = /\S+@\S+/
-  # Shorter messages without a question mark are acknowledgements, such as "Yes, please"
+  QUESTION_MARK = /[?？؟]/
+  # Shorter messages without a question mark are acknowledgements, such as "Yes, please" or "好的"
   QUESTION_MIN_WORDS = 4
+  # Languages written without spaces count characters instead of words
+  CJK_CHARACTER = /[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/
+  QUESTION_MIN_CJK_CHARACTERS = 6
+  # A shorter copy, such as an acronym, says too little to find the visitor's message
+  COPY_MIN_LENGTH = 12
+  COPY_MIN_WORDS = 3
 
   # question: the unanswered question in English; visitor_question: the visitor's own words for it, as the model copied
   # them; message: the visitor message being answered
@@ -49,8 +56,8 @@ class AiAgents::UnansweredRecorder
   end
 
   # The visitor's words as the model copied them, if one of their recent messages has them, so a translation or a made-up
-  # wording is never stored. Otherwise their latest message that asks something, so not just an email or "yes, please",
-  # then their latest message.
+  # wording is never stored; or the message the copy contains. Otherwise their latest message that asks something, so not
+  # just an email or "yes, please", then their latest message.
   def wording
     contents = recent_contents
     text = copied_wording(contents) || contents.find { |content| asks_something?(content) } || contents.first || entry_question
@@ -63,19 +70,20 @@ class AiAgents::UnansweredRecorder
                 .reorder(id: :desc).limit(RECENT_MESSAGES).pluck(:content)
   end
 
-  # Ignoring case and spacing, a message contains the copy, or the copy contains a whole message that asks something
+  # Ignoring case and spacing: the copy, when a message contains it; or a message that asks something, when the copy
+  # contains it, as the rest of the copy isn't the visitor's words
   def copied_wording(contents)
     copy = visitor_question.to_s.squish
-    return if copy.empty?
+    return if copy.length < COPY_MIN_LENGTH && copy.split.size < COPY_MIN_WORDS
 
-    copy if contents.any? do |content|
-      text = content.squish.downcase
-      text.include?(copy.downcase) || (asks_something?(content) && copy.downcase.include?(text))
-    end
+    needle = copy.downcase
+    return copy if contents.any? { |content| content.squish.downcase.include?(needle) }
+
+    contents.find { |content| asks_something?(content) && needle.include?(content.squish.downcase) }
   end
 
   def asks_something?(content)
     text = content.gsub(EMAIL, ' ').squish
-    text.include?('?') || text.split.size >= QUESTION_MIN_WORDS
+    text.match?(QUESTION_MARK) || text.split.size >= QUESTION_MIN_WORDS || text.scan(CJK_CHARACTER).size >= QUESTION_MIN_CJK_CHARACTERS
   end
 end

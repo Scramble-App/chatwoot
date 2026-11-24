@@ -10,6 +10,9 @@
 class AiAgents::ReplyService
   include Events::Types
 
+  # Widget contacts get a Haikunator name, such as bold-river-421, until the visitor gives their own
+  GENERATED_NAME = /\A[a-z]+-[a-z]+-\d+\z/
+
   # message: the latest incoming message of the conversation
   pattr_initialize [:agent_bot!, :message!]
 
@@ -88,26 +91,31 @@ class AiAgents::ReplyService
     { team_available: team_available? }
   end
 
-  # Like the widget's email collection, an email of another contact merges this contact into it, keeping its name. That
-  # contact can be another customer, so the prompt gets only the details the visitor gave in this conversation.
+  # An email can merge the visitor into an existing customer, so the contact only gets details it lacks: an email when it
+  # has none, a name when it has a generated one, a company when it has none. The conversation keeps what the visitor gave:
+  # name and company for the prompt, and an email the contact didn't take for the handoff note.
   def save_contact(details)
-    params = details.slice('name', 'email').symbolize_keys
-    if params.present?
-      ContactIdentifyAction.new(contact: conversation.contact, params: params, retain_original_contact_name: true, discard_invalid_attrs: true)
-                           .perform
-      # A merge moves the conversation to the other contact
-      conversation.reload
-    end
-    save_company(details['company']) if details['company']
+    save_email(details['email']) if details['email']
+    contact = conversation.contact
+    contact.update!(name: details['name']) if details['name'] && (contact.name.blank? || contact.name.match?(GENERATED_NAME))
+    save_company(contact, details['company']) if details['company']
     remember_visitor_details(details)
     { saved: details.keys }
   rescue ActiveRecord::RecordInvalid => e
     { error: e.record.errors.full_messages.to_sentence }
   end
 
-  # The company of a contact is never replaced: the contact can be an existing customer
-  def save_company(company)
-    contact = conversation.contact
+  # Like the widget's email collection: the contact takes the email, or merges into the contact that has it, which keeps its
+  # name. The conversation moves with a merge.
+  def save_email(email)
+    return if conversation.contact.email.present?
+
+    ContactIdentifyAction.new(contact: conversation.contact, params: { email: email }, retain_original_contact_name: true,
+                              discard_invalid_attrs: true).perform
+    conversation.reload
+  end
+
+  def save_company(contact, company)
     attributes = contact.additional_attributes || {}
     contact.update!(additional_attributes: attributes.merge('company_name' => company)) if attributes['company_name'].blank?
   end
@@ -115,20 +123,22 @@ class AiAgents::ReplyService
   def remember_visitor_details(details)
     attributes = conversation.additional_attributes || {}
     given = (attributes[AiAgents::ConversationContext::VISITOR_DETAILS] || {}).merge(details.slice('name', 'company'))
-    conversation.update!(additional_attributes: attributes.merge(AiAgents::ConversationContext::VISITOR_DETAILS => given))
+    attributes = attributes.merge(AiAgents::ConversationContext::VISITOR_DETAILS => given)
+    email = details['email']
+    attributes = attributes.merge(AiAgents::ConversationContext::VISITOR_EMAIL => email) if email && email != conversation.contact.email
+    conversation.update!(additional_attributes: attributes)
   end
 
-  # The unanswered question is recorded after the reply is posted, so a failure there doesn't cost the visitor the reply
+  # The handoff and its reply happen together or not at all, so a failure leaves the conversation for the job's retry. The
+  # unanswered question is recorded after them, so a failure there doesn't cost the visitor the reply.
   def hand_off_with(content, reason: nil, language: nil)
     request = @handoff_request || {}
     handoff = AiAgents::HandoffService.new(
       agent_bot: agent_bot, message: message, reason: request['reason'] || reason, summary: request['summary'],
       unanswered_question: request['unanswered_question'], visitor_question: request['visitor_question'], language: language
     )
-    return unless handoff.perform
-
-    post(content, preserve_waiting_since: true)
-    handoff.record_unanswered_question
+    handed_off = ActiveRecord::Base.transaction { handoff.perform && post(content, preserve_waiting_since: true) }
+    handoff.record_unanswered_question if handed_off
   end
 
   def post(content, preserve_waiting_since: false)

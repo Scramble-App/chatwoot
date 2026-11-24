@@ -92,6 +92,25 @@ RSpec.describe AiAgents::HandoffService do
     expect(conversation.reload).to have_attributes(team: nil, status: 'open')
   end
 
+  it 'hands off all or nothing, so a failed handoff is done again cleanly' do
+    calls = 0
+    allow(conversation).to receive(:bot_handoff!).and_wrap_original do |original|
+      calls += 1
+      raise ActiveRecord::Deadlocked, 'deadlock detected' if calls == 1
+
+      original.call
+    end
+
+    expect { hand_off(reason: 'human_requested') }.to raise_error(ActiveRecord::Deadlocked)
+    expect(conversation.reload).to have_attributes(status: 'pending', team: nil, label_list: [])
+    expect(conversation.messages.where(private: true)).to be_empty
+
+    hand_off(reason: 'human_requested')
+
+    expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
+    expect(conversation.messages.where(private: true).count).to eq(1)
+  end
+
   it 'changes nothing when an agent took the conversation over or it was resolved in the meantime' do
     agent = create(:user, account: account, role: :agent)
     conversation.update!(assignee: agent)

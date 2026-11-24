@@ -15,10 +15,15 @@ class AiAgents::HandoffService
     conversation.reload
     return false unless conversation.pending? && conversation.assignee_id.nil?
 
-    assign_team
-    conversation.add_labels([label.title])
-    create_note
-    conversation.bot_handoff!
+    label_title = label.title
+    # All or nothing: a half-done handoff can leave the conversation pending with the team, the note or an assignee, where
+    # the AI agent never replies again and nobody is told
+    ActiveRecord::Base.transaction do
+      assign_team
+      conversation.add_labels([label_title])
+      create_note
+      conversation.bot_handoff!
+    end
     true
   end
 
@@ -43,10 +48,11 @@ class AiAgents::HandoffService
     conversation.update!(team: team) if team && conversation.team_id != team.id
   end
 
-  # Two handoffs in the account can try to create the label at once
+  # Two handoffs in the account can try to create the label at once; the savepoint keeps a caller's transaction usable
   def label
     labels = conversation.account.labels
-    labels.find_by(title: LABEL) || labels.create!(title: LABEL, description: I18n.t('ai_agents.handoff.label_description'))
+    labels.find_by(title: LABEL) ||
+      Label.transaction(requires_new: true) { labels.create!(title: LABEL, description: I18n.t('ai_agents.handoff.label_description')) }
   rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
     labels.find_by!(title: LABEL)
   end
@@ -63,13 +69,9 @@ class AiAgents::HandoffService
   end
 
   def note
-    facts = {
-      reason: I18n.t("ai_agents.handoff.reasons.#{reason}"),
-      question: note_question,
-      company: company,
-      email: conversation.contact.email,
-      language: language
-    }
+    facts = { reason: I18n.t("ai_agents.handoff.reasons.#{reason}"), question: note_question, company: company, email: conversation.contact.email }
+    facts[:given_email] = given_email if given_email.present?
+    facts[:language] = language
     lines = facts.map { |name, value| I18n.t("ai_agents.handoff.note.#{name}", name => value.presence || I18n.t('ai_agents.handoff.unknown')) }
     lines << I18n.t('ai_agents.handoff.note.summary', summary: summary) if summary.present?
     [I18n.t('ai_agents.handoff.note.title'), *lines].join("\n")
@@ -79,6 +81,12 @@ class AiAgents::HandoffService
   def company
     conversation.additional_attributes&.dig(AiAgents::ConversationContext::VISITOR_DETAILS, 'company').presence ||
       conversation.contact.additional_attributes&.dig('company_name')
+  end
+
+  # An email the visitor gave that their contact didn't take, as it had one
+  def given_email
+    email = conversation.additional_attributes&.dig(AiAgents::ConversationContext::VISITOR_EMAIL)
+    email unless email == conversation.contact.email
   end
 
   # The English question the model couldn't answer, otherwise what the visitor wrote last

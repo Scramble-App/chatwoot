@@ -83,6 +83,22 @@ RSpec.describe AiAgents::UnansweredRecorder do
     expect(agent_bot.knowledge_entries).to have_received(:create!).exactly(3).times
   end
 
+  context 'with a conversation in a language written without spaces' do
+    it 'takes a question with a full-width question mark, not an acknowledgement' do
+      contents = %w[你好 可以用加密货币还款吗？ 好的]
+      messages = contents.map { |content| visitor_message(content) }
+
+      expect(recorded_wording(question: 'Can loans be repaid in crypto?', to: messages.last)).to eq('可以用加密货币还款吗？')
+    end
+
+    it 'takes a longer message without a question mark as a question' do
+      visitor_message('我想了解一下加密货币还款')
+      acknowledgement = visitor_message('好的')
+
+      expect(recorded_wording(question: 'Can loans be repaid in crypto?', to: acknowledgement)).to eq('我想了解一下加密货币还款')
+    end
+  end
+
   context 'with a conversation in another language' do
     let(:question) { 'How is the payout of a refinancing loan calculated?' }
     let(:accepted) { visitor_message('Да, передайте, пожалуйста') }
@@ -101,10 +117,16 @@ RSpec.describe AiAgents::UnansweredRecorder do
                               to: accepted)).to eq('как считается сумма нового займа при рефинансировании')
     end
 
-    it 'stores the copy when it holds a whole message that asks something' do
-      copy = 'Добрый день. Как считается сумма нового займа при рефинансировании?'
+    it 'stores the message itself when the copy holds a whole message that asks something, and more' do
+      copy = 'Как считается сумма нового займа при рефинансировании? And can we repay it in crypto?'
 
-      expect(recorded_wording(question: question, visitor_question: copy, to: accepted)).to eq(copy)
+      expect(recorded_wording(question: question, visitor_question: copy,
+                              to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
+    end
+
+    it 'does not take a short copy, such as an acronym, for the wording' do
+      expect(recorded_wording(question: question, visitor_question: 'APR',
+                              to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
     end
 
     it 'falls back to the latest message that asks something when the copy is not in the conversation' do
@@ -113,7 +135,7 @@ RSpec.describe AiAgents::UnansweredRecorder do
       expect(recorded_wording(question: question, to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
     end
 
-    it 'does not take a short reply for the whole copy' do
+    it 'does not take a short reply for the whole message in the copy' do
       copy = 'Да, а как считается выплата? Понятно, спасибо'
       visitor_message('Да')
 

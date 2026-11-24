@@ -95,6 +95,22 @@ RSpec.describe MessageTranslations::OpenaiResponsesClient do
       expect_client_error("OpenAI didn't respond within 120 seconds. Try a lower 'Translation reasoning effort'") { create }
     end
 
+    it 'drops the prompt cache params an endpoint rejects' do
+      error = { message: "Unknown parameter: 'prompt_cache_options'.", param: 'prompt_cache_options' }
+      rejected = stub_request(:post, 'https://api.openai.com/v1/responses')
+                 .with { |request| JSON.parse(request.body).key?('prompt_cache_options') }
+                 .to_return(status: 400, body: { error: error }.to_json)
+      accepted = stub_request(:post, 'https://api.openai.com/v1/responses')
+                 .with { |request| JSON.parse(request.body).keys.sort == %w[input model prompt_cache_key] }
+                 .to_return(status: 200, body: { status: 'completed' }.to_json)
+
+      response, = described_class.new(api_key: 'openai-key').create(model: 'gpt-6-luna', input: 'Hello', prompt_cache_key: 'ai-agent-bot-1',
+                                                                    prompt_cache_options: { mode: 'explicit' })
+
+      expect(response.status).to eq(200)
+      expect([rejected, accepted]).to all(have_been_requested.once)
+    end
+
     it 'explains when OpenAI cannot be reached' do
       stub_request(:post, 'https://api.openai.com/v1/responses').to_raise(Net::OpenTimeout)
 

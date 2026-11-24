@@ -88,12 +88,17 @@ class AgentBotListener < BaseListener
     AgentBots::AiAgentReplyJob.perform_later(agent_bot.id, message.id)
   end
 
-  # A team member answered the visitor, so the AI agent stops: the conversation opens, without the AI handoff note or label
+  # A team member answered the visitor, so the AI agent stops: the conversation opens, without the AI handoff note or label.
+  # An inbox member who answered gets it, so auto assignment doesn't give it to someone else.
   def open_for_human_reply(message)
     conversation = message.conversation
     return unless message.outgoing? && !message.private? && message.sender_type == 'User' && conversation.pending?
 
-    conversation.open!
+    if conversation.assignee_id.nil? && conversation.inbox.members.exists?(message.sender_id)
+      conversation.update!(status: :open, assignee: message.sender)
+    else
+      conversation.open!
+    end
   end
 
   def process_message_event(method_name, agent_bot, message, _event)

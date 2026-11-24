@@ -3,8 +3,10 @@
 class AiAgents::ConversationContext
   HISTORY_LIMIT = 30
   MESSAGE_LIMIT = 2_000
-  # Conversation additional attribute with the name and company the visitor gave the agent (save_contact)
+  # Conversation additional attributes with the name and company the visitor gave the agent (save_contact), and an email
+  # they gave that their contact didn't take, for the team
   VISITOR_DETAILS = 'ai_agent_visitor'.freeze
+  VISITOR_EMAIL = 'ai_agent_visitor_email'.freeze
 
   # team: the handoff team of the bot, or nil
   pattr_initialize [:conversation!, :message!, :team]

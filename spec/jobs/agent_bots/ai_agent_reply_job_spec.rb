@@ -182,5 +182,29 @@ RSpec.describe AgentBots::AiAgentReplyJob do
       expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
       expect(bot_replies.pluck(:content)).to eq(['A colleague will join shortly.'])
     end
+
+    it 'undoes the handoff when its reply fails to post, so the job runs again cleanly' do
+      stub_openai_responses(openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.' }]),
+                            openai_reply(reply: 'A colleague will join shortly.', kind: 'handoff'))
+      posts = 0
+      allow(AiAgents::ReplyService).to receive(:new).and_wrap_original do |original, **arguments|
+        original.call(**arguments).tap do |service|
+          allow(service).to receive(:post).and_wrap_original do |post, *args, **options|
+            posts += 1
+            raise ActiveRecord::StatementInvalid, 'canceling statement due to statement timeout' if posts == 1
+
+            post.call(*args, **options)
+          end
+        end
+      end
+
+      expect { perform }.to raise_error(ActiveRecord::StatementInvalid)
+      expect(conversation.reload).to have_attributes(status: 'pending', team: nil, label_list: [])
+      perform
+
+      expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
+      expect(conversation.messages.where(sender: agent_bot, private: true).count).to eq(1)
+      expect(bot_replies.pluck(:content)).to eq(['A colleague will join shortly.'])
+    end
   end
 end

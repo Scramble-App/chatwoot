@@ -94,6 +94,32 @@ RSpec.describe AiAgents::ReplyService do
     expect(context).not_to include('Jane Doe', 'BigBrand')
   end
 
+  it 'keeps the name and email of the customer an email merged the visitor into, and tells the team the new email' do
+    existing = create(:contact, account: account, name: 'Jane Doe', email: 'jane@bigbrand.test')
+    stub_openai_responses(openai_tool_calls(['save_contact', { name: nil, company: nil, email: 'jane@bigbrand.test' }]), openai_reply)
+    reply
+    stub_openai_responses(openai_tool_calls(['save_contact', { name: 'Bob', company: nil, email: 'bob@elsewhere.test' }]),
+                          openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.' }]),
+                          openai_reply(kind: 'handoff'))
+
+    reply(visitor_message("I'm Bob, and better use bob@elsewhere.test"))
+
+    expect(existing.reload).to have_attributes(name: 'Jane Doe', email: 'jane@bigbrand.test')
+    expect(conversation.reload.additional_attributes).to include('ai_agent_visitor' => { 'name' => 'Bob' },
+                                                                 'ai_agent_visitor_email' => 'bob@elsewhere.test')
+    expect(note).to include("Email: jane@bigbrand.test\nEmail given in chat: bob@elsewhere.test")
+  end
+
+  it 'keeps a name the contact already has' do
+    contact.update!(name: 'Anna Smith')
+    stub_openai_responses(openai_tool_calls(['save_contact', { name: 'Ann', company: nil, email: nil }]), openai_reply)
+
+    reply
+
+    expect(contact.reload.name).to eq('Anna Smith')
+    expect(conversation.reload.additional_attributes['ai_agent_visitor']).to eq('name' => 'Ann')
+  end
+
   it 'hands off, then posts the reply, when the model asks for it' do
     allow(OnlineStatusTracker).to receive(:get_available_users).and_return(team_member.id.to_s => 'online')
     hand_off = { reason: 'no_answer', summary: 'Asked about crypto.', unanswered_question: 'Can loans be repaid in crypto?',
