@@ -118,11 +118,17 @@ class AgentBotKnowledge::CsvImportService
 
   # Blank keys get numbers after the highest KB- number of the bot and of the file, so they never take a key of the file
   def prepare_keys(rows)
+    # Keys are compared the way the model stores them, so a key pasted with a non-breaking space still matches its entry
+    rows.map(&:last).each { |attributes| attributes[:key] = normalized_key(attributes[:key]) if attributes.key?(:key) }
     keys = rows.filter_map { |_, attributes| attributes[:key] }
     @existing_entries = agent_bot.knowledge_entries.where(key: keys).index_by(&:key)
     @rows_by_key = {}
     file_numbers = keys.filter_map { |key| key[KB_KEY, 1]&.to_i }
     @last_key_number = [AgentBotKnowledgeEntry.next_key_number(agent_bot.id) - 1, *file_numbers].max
+  end
+
+  def normalized_key(key)
+    AgentBotKnowledgeEntry.normalize_value_for(:key, key).presence if key
   end
 
   def build_entries(rows)

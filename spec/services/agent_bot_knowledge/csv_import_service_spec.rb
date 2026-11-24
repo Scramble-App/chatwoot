@@ -148,6 +148,30 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
     end
   end
 
+  describe 'keys with invisible spaces' do
+    it 'updates the entry whose key was pasted with non-breaking spaces' do
+      create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'KB-001', question: 'Old question?')
+
+      result = import("ID,Вопрос\n\u00A0KB-001\u00A0,New question?\n")
+
+      expect(result).to eq(created: 0, updated: 1, errors: [])
+      expect(entries.pluck(:key, :question)).to eq([['KB-001', 'New question?']])
+    end
+
+    it 'numbers blank keys after a padded KB key of the file' do
+      create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'KB-101')
+
+      expect(import("ID,Вопрос\n\u00A0KB-102,First?\n,Second?\n")).to eq(created: 2, updated: 0, errors: [])
+      expect(entries.pluck(:key)).to eq(%w[KB-101 KB-102 KB-103])
+    end
+
+    it 'reports a padded duplicate of a key in the same file' do
+      result = import("ID,Вопрос\nKB-200,First?\n\u200BKB-200\u00A0,Second?\n", dry_run: true)
+
+      expect(result[:errors]).to eq([{ row: 3, message: 'The key KB-200 is already in row 2' }])
+    end
+  end
+
   describe 'dry run' do
     it 'returns the counts without saving' do
       create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'KB-001', question: 'Old question?')

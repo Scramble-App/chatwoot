@@ -48,8 +48,10 @@ class AgentBotKnowledgeEntry < ApplicationRecord
 
   enum :status, { draft: 0, published: 1, needs_answer: 2 }, validate: true
 
-  # [[:space:]] also covers the non-breaking and other Unicode spaces of keys pasted from documents
-  normalizes :key, with: ->(key) { key.gsub(/\A[[:space:]]+|[[:space:]]+\z/, '') }
+  # Unicode spaces (non-breaking and others) plus the invisible zero-width space, word joiner, BOM and NUL that keys pasted
+  # from documents can carry
+  KEY_SPACE = /[[:space:]\u200B\u2060\uFEFF\u0000]/
+  normalizes :key, with: ->(key) { key.gsub(/\A#{KEY_SPACE}+|#{KEY_SPACE}+\z/o, '') }
   # Trimmed, and nil when blank, so the API and the CSV import store the same texts
   normalizes :category, :frequency, :question, :alternative_questions, :short_answer, :answer, :selling_point,
              with: ->(text) { text.strip.presence }
@@ -62,7 +64,7 @@ class AgentBotKnowledgeEntry < ApplicationRecord
   before_validation :ensure_account_id
   before_validation :assign_key, if: -> { key.blank? }
 
-  validates :key, presence: true, uniqueness: { scope: :agent_bot_id }, format: { without: /[[:space:]]/ }
+  validates :key, presence: true, uniqueness: { scope: :agent_bot_id }, format: { without: KEY_SPACE }
   validates :key, :category, :frequency, length: { maximum: SHORT_TEXT_LIMIT }
   validates :question, presence: true, length: { maximum: QUESTION_LIMIT }
   validates :alternative_questions, :short_answer, :answer, :selling_point, length: { maximum: TEXT_LIMIT }
