@@ -266,6 +266,15 @@ RSpec.describe 'Agent bot knowledge entries API', type: :request do
       expect(response).to have_http_status(:success)
       expect(entry.reload).to have_attributes(key: 'PRICING-1', question: 'Changed?')
     end
+
+    it 'keeps the key of the entry when the key is only invisible characters' do
+      entry = create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'PRICING-1')
+
+      patch "#{entries_url}/#{entry.id}", headers: admin.create_new_auth_token, params: { key: "\u200B\u2060", question: 'Changed?' }, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(entry.reload).to have_attributes(key: 'PRICING-1', question: 'Changed?')
+    end
   end
 
   describe 'DELETE /knowledge_entries/:id' do

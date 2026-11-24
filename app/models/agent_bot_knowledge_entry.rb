@@ -64,7 +64,9 @@ class AgentBotKnowledgeEntry < ApplicationRecord
   before_validation :ensure_account_id
   before_validation :assign_key, if: -> { key.blank? }
 
-  validates :key, presence: true, uniqueness: { scope: :agent_bot_id }, format: { without: KEY_SPACE }
+  # PostgreSQL rejects a NUL in a query, so a key with one skips the uniqueness check and fails the format check instead
+  validates :key, presence: true, uniqueness: { scope: :agent_bot_id, unless: -> { key.to_s.include?("\u0000") } },
+                  format: { without: KEY_SPACE }
   validates :key, :category, :frequency, length: { maximum: SHORT_TEXT_LIMIT }
   validates :question, presence: true, length: { maximum: QUESTION_LIMIT }
   validates :alternative_questions, :short_answer, :answer, :selling_point, length: { maximum: TEXT_LIMIT }

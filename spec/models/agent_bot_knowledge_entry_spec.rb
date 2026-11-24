@@ -130,6 +130,13 @@ RSpec.describe AgentBotKnowledgeEntry do
       end
     end
 
+    it 'rejects a NUL inside a key as invalid instead of raising' do
+      entry = build(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: "KB\u0000063")
+
+      expect(entry).not_to be_valid
+      expect(entry.errors[:key]).to eq(['is invalid'])
+    end
+
     it 'finds an entry by its key given with surrounding whitespace' do
       entry = create_entry(key: 'KB-060')
 

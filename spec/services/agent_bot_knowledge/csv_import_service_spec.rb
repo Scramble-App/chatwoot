@@ -291,6 +291,11 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
         .to raise_error(described_class::Error, 'Choose a CSV file to import')
     end
 
+    it 'rejects a file with NUL characters' do
+      expect { import("ID,Вопрос\nKB-001,Fees\u0000?\n") }
+        .to raise_error(described_class::Error, 'The file contains NUL characters: save it again as a CSV text file')
+    end
+
     it 'rejects a file over 5 MB' do
       file = csv_file("Вопрос\n#{'a' * 5.megabytes}\n")
 

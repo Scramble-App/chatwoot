@@ -27,9 +27,11 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
     @knowledge_entry = @agent_bot.knowledge_entries.create!(permitted_params)
   end
 
-  # A blank key keeps the key of the entry; on create it gets the next KB- number
+  # A blank key keeps the key of the entry (blank as the model trims it, so invisible characters count); on create it gets
+  # the next KB- number
   def update
-    @knowledge_entry.update!(params[:key].blank? ? permitted_params.except(:key) : permitted_params)
+    blank_key = AgentBotKnowledgeEntry.normalize_value_for(:key, params[:key].to_s).blank?
+    @knowledge_entry.update!(blank_key ? permitted_params.except(:key) : permitted_params)
   end
 
   def destroy

@@ -84,6 +84,8 @@ class AgentBotKnowledge::CsvImportService
 
     content = file.read.force_encoding(Encoding::UTF_8)
     raise Error, I18n.t('agent_bot_knowledge.import.invalid_encoding') unless content.valid_encoding?
+    # A CSV text file has no NULs, and PostgreSQL would reject them on save
+    raise Error, I18n.t('agent_bot_knowledge.import.null_character') if content.include?("\u0000")
 
     content.delete_prefix("\uFEFF")
   end
