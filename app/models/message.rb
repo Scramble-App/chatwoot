@@ -458,7 +458,9 @@ class Message < ApplicationRecord
 
   def reopen_resolved_conversation
     # mark resolved bot conversation as pending to be reopened by bot processor service
-    if conversation.inbox.active_bot?
+    if conversation.inbox.ai_agent_active?
+      reopen_resolved_conversation_for_ai_agent
+    elsif conversation.inbox.active_bot?
       conversation.pending!
     elsif conversation.inbox.api?
       Current.executed_by = sender if reopened_by_contact?
@@ -466,6 +468,12 @@ class Message < ApplicationRecord
     else
       conversation.open!
     end
+  end
+
+  # The AI agent answers a visitor who writes again as in a new conversation: the agent who closed it isn't involved, and
+  # a new handoff assigns the team and an agent again
+  def reopen_resolved_conversation_for_ai_agent
+    conversation.update!(status: :pending, assignee: nil, team: nil)
   end
 
   def reopened_by_contact?

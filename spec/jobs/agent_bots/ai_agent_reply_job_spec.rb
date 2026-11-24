@@ -46,6 +46,17 @@ RSpec.describe AgentBots::AiAgentReplyJob do
     expect(reply_service).to have_received(:perform)
   end
 
+  it 'replies to a visitor who writes again after the team resolved the conversation' do
+    agent = create(:user, account: account)
+    create(:inbox_member, inbox: inbox, user: agent)
+    conversation.update!(status: :resolved, assignee: agent)
+
+    perform
+
+    expect(reply_service).to have_received(:perform)
+    expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: nil)
+  end
+
   it 'replies when the later bot message answers an earlier visitor message' do
     earlier = create(:message, conversation: conversation, account: account, inbox: inbox, sender: contact, content: 'Hello')
     message

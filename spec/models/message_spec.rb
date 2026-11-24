@@ -300,6 +300,41 @@ RSpec.describe Message do
       expect(conversation.open?).to be false
       expect(conversation.pending?).to be true
     end
+
+    context 'when the team had the conversation before it was resolved' do
+      let(:agent) { create(:user, account: conversation.account) }
+      let(:team) { create(:team, account: conversation.account) }
+      let(:ai_agent_bot) { create(:agent_bot, :ai_agent, account: conversation.account) }
+
+      before do
+        create(:team_member, team: team, user: agent)
+        conversation.update!(status: :resolved, assignee: agent, team: team)
+      end
+
+      it 'gives it to the active AI agent bot as pending, without the assignee and team' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot)
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: nil, team_id: nil)
+      end
+
+      it 'keeps the assignee and team for a webhook bot' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: create(:agent_bot, account: conversation.account))
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: agent.id, team_id: team.id)
+      end
+
+      it 'opens it for the assignee and team when the AI agent bot is inactive' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot, status: :inactive)
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'open', assignee_id: agent.id, team_id: team.id)
+      end
+    end
   end
 
   describe '#mark_pending_conversation_as_open_for_human_response' do

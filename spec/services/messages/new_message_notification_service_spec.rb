@@ -112,4 +112,52 @@ describe Messages::NewMessageNotificationService do
       end
     end
   end
+
+  context 'when an AI agent bot answers the inbox' do
+    let(:account) { create(:account) }
+    let(:inbox) { create(:inbox, account: account) }
+    let(:agent) { create(:user, account: account) }
+    let(:agent_bot) { create(:agent_bot, :ai_agent, account: account) }
+    let!(:agent_bot_inbox) { create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot) }
+    let(:conversation) { create(:conversation, account: account, inbox: inbox, status: :pending) }
+    let(:message) { create(:message, conversation: conversation, account: account, inbox: inbox) }
+
+    before do
+      create(:inbox_member, inbox: inbox, user: agent)
+      create(:conversation_participant, conversation: conversation, user: agent)
+    end
+
+    def notified?(notification_type)
+      described_class.new(message: message).perform
+      agent.notifications.exists?(notification_type: notification_type, secondary_actor: message)
+    end
+
+    it 'does not notify the agents who took part while it answers the pending conversation' do
+      expect(notified?('participating_conversation_new_message')).to be(false)
+    end
+
+    it 'notifies them once the conversation is handed over' do
+      conversation.update!(status: :open)
+
+      expect(notified?('participating_conversation_new_message')).to be(true)
+    end
+
+    it 'notifies the assignee of a pending conversation an agent took' do
+      conversation.update!(assignee: agent)
+
+      expect(notified?('assigned_conversation_new_message')).to be(true)
+    end
+
+    it 'notifies them when the bot is inactive' do
+      agent_bot_inbox.update!(status: :inactive)
+
+      expect(notified?('participating_conversation_new_message')).to be(true)
+    end
+
+    it 'notifies them for a webhook bot' do
+      agent_bot.update!(bot_type: :webhook, outgoing_url: 'https://example.com/bot')
+
+      expect(notified?('participating_conversation_new_message')).to be(true)
+    end
+  end
 end
