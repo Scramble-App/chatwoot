@@ -7,6 +7,10 @@ class AgentBotKnowledge::CsvImportService
 
   MAX_FILE_SIZE = 5.megabytes
   MAX_ROWS = 5_000
+  # Blank rows are skipped, but they count here, so a file of them stops early too
+  MAX_LINES = 2 * MAX_ROWS
+  MAX_HEADER_SIZE = 8.kilobytes
+  MAX_HEADER_COLUMNS = 100
   COLUMN_SEPARATORS = [',', ';'].freeze
   KB_KEY = /\AKB-(\d+)\z/
   # The export quotes a cell that starts with a formula character (CSVSafe), so the import removes that quote again
@@ -24,6 +28,9 @@ class AgentBotKnowledge::CsvImportService
       AgentBotKnowledgeEntry.lock_keys!(agent_bot.id)
       build_result(rows).tap { |result| save if result[:errors].empty? }
     end
+  rescue ActiveRecord::RecordNotUnique
+    # An entry with a key of the file was saved meanwhile; the transaction rolled the import back
+    raise Error, I18n.t('agent_bot_knowledge.import.changed_meanwhile')
   end
 
   private
@@ -34,18 +41,38 @@ class AgentBotKnowledge::CsvImportService
     { created: @entries.count(&:new_record?), updated: @entries.count { |entry| entry.persisted? && entry.changed? }, errors: errors }
   end
 
-  # Reads row by row and stops past MAX_ROWS rows, blank rows included, so a large file is never loaded whole
+  # The header must be one complete line, so reading it is bounded by MAX_HEADER_SIZE
   def parse_rows
     content = read_content
-    csv = CSV.new(content, col_sep: column_separator(content))
-    columns = columns_for(csv.shift)
-    csv.each.with_index(2).filter_map do |cells, row_number|
-      raise Error, I18n.t('agent_bot_knowledge.import.too_many_rows', count: MAX_ROWS) if row_number > MAX_ROWS + 1
-
-      [row_number, columns.transform_values { |position| clean(cells[position]) }] unless cells.all?(&:blank?)
-    end
+    header_line = content.each_line.first.to_s
+    separator = column_separator(header_line)
+    columns = columns_for(CSV.parse_line(header_line, col_sep: separator))
+    csv = CSV.new(content, col_sep: separator)
+    csv.shift
+    data_rows(csv, columns)
   rescue CSV::MalformedCSVError => e
     raise Error, I18n.t('agent_bot_knowledge.import.invalid_csv', error: e.message)
+  end
+
+  # Reads row by row and stops past the limits, so a large file is never loaded whole
+  def data_rows(csv, columns)
+    rows = []
+    csv.each.with_index(2) do |cells, row_number|
+      raise too_many_rows(MAX_LINES) if row_number > MAX_LINES + 1
+      next if cells.all?(&:blank?)
+
+      rows << [row_number, columns.transform_values { |position| clean(cells[position]) }]
+      raise too_many_rows(MAX_ROWS) if rows.size > MAX_ROWS
+    end
+    rows
+  end
+
+  def too_many_rows(count)
+    Error.new(I18n.t('agent_bot_knowledge.import.too_many_rows', count: count))
+  end
+
+  def header_too_long
+    Error.new(I18n.t('agent_bot_knowledge.import.header_too_long', size: MAX_HEADER_SIZE / 1.kilobyte, count: MAX_HEADER_COLUMNS))
   end
 
   # The UTF-8 text of the file without a BOM
@@ -59,11 +86,14 @@ class AgentBotKnowledge::CsvImportService
     content.delete_prefix("\uFEFF")
   end
 
-  # Excel with a Russian locale saves semicolons; the separator that finds more known headers wins, a comma on a tie
-  def column_separator(content)
-    header_line = content.each_line.first.to_s
+  # Excel with a Russian locale saves semicolons; the separator that finds more known headers wins, a comma on a tie.
+  # A split into too many columns finds none, so a wide header is never mapped.
+  def column_separator(header_line)
+    raise header_too_long if header_line.bytesize > MAX_HEADER_SIZE
+
     COLUMN_SEPARATORS.max_by do |separator|
-      CSV.parse_line(header_line, col_sep: separator).to_a.count { |name| AgentBotKnowledge::CsvColumns.attribute_for(name) }
+      names = CSV.parse_line(header_line, col_sep: separator).to_a
+      names.size > MAX_HEADER_COLUMNS ? 0 : names.count { |name| AgentBotKnowledge::CsvColumns.attribute_for(name) }
     rescue CSV::MalformedCSVError
       0
     end
@@ -71,6 +101,8 @@ class AgentBotKnowledge::CsvImportService
 
   # Attribute => position of its first column; other columns are ignored
   def columns_for(header)
+    raise header_too_long if header.to_a.size > MAX_HEADER_COLUMNS
+
     columns = {}
     Array(header).each_with_index do |name, position|
       attribute = AgentBotKnowledge::CsvColumns.attribute_for(name)

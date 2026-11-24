@@ -173,6 +173,23 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect(key_checks.size).to eq(3)
       expect(entries.count).to eq(3)
     end
+
+    it 'asks to import again when an entry with a key of the file was saved meanwhile' do
+      saves = 0
+      # The race needs an entry saved between the validation and the save of the import, so the second save fails
+      # rubocop:disable RSpec/AnyInstance
+      allow_any_instance_of(AgentBotKnowledgeEntry).to receive(:save!).and_wrap_original do |original, *args, **options|
+        saves += 1
+        raise ActiveRecord::RecordNotUnique if saves == 2
+
+        original.call(*args, **options)
+      end
+      # rubocop:enable RSpec/AnyInstance
+
+      expect { import("ID,Вопрос\nPRICING-1,First?\nPRICING-2,Second?\n") }
+        .to raise_error(described_class::Error, 'The knowledge base changed during the import, so nothing was imported. Import the file again.')
+      expect(entries).to be_empty
+    end
   end
 
   describe 'invalid rows' do
@@ -242,11 +259,25 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect { import("Вопрос\n#{"Question?\n" * 5_001}\"Unclosed\n") }.to raise_error(described_class::Error, 'The file has more than 5000 rows')
     end
 
-    it 'counts the blank rows towards the row limit' do
+    it 'limits the rows with an entry and stops a file of blank rows early' do
       stub_const("#{described_class}::MAX_ROWS", 3)
+      stub_const("#{described_class}::MAX_LINES", 5)
 
-      expect(import("Вопрос\nFirst?\n\nSecond?\n", dry_run: true)).to include(created: 2)
-      expect { import("Вопрос\nFirst?\n\n,\nSecond?\n", dry_run: true) }.to raise_error(described_class::Error, 'The file has more than 3 rows')
+      expect(import("Вопрос\nFirst?\nSecond?\nThird?\n\n", dry_run: true)).to include(created: 3)
+      expect { import("Вопрос\nFirst?\n\nSecond?\nThird?\nFourth?\n", dry_run: true) }
+        .to raise_error(described_class::Error, 'The file has more than 3 rows')
+      expect { import("Вопрос\n#{"\n" * 6}", dry_run: true) }.to raise_error(described_class::Error, 'The file has more than 5 rows')
+    end
+
+    it 'rejects a very wide header before it reads the column names' do
+      allow(AgentBotKnowledge::CsvColumns).to receive(:attribute_for).and_call_original
+      message = 'The header row of the file is too long: keep it under 8 KB and 100 columns'
+
+      expect { import("Вопрос#{',a' * 2_500_000}\nNew?\n") }.to raise_error(described_class::Error, message)
+      expect(AgentBotKnowledge::CsvColumns).not_to have_received(:attribute_for)
+
+      expect { import("Вопрос#{',a' * 100}\nNew?\n") }.to raise_error(described_class::Error, message)
+      expect(AgentBotKnowledge::CsvColumns).to have_received(:attribute_for).once
     end
 
     it 'rejects a file that is not UTF-8' do
