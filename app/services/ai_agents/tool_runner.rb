@@ -3,6 +3,7 @@
 class AiAgents::ToolRunner
   EMAIL_FORMAT = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
   CONTACT_DETAIL_LIMIT = 255
+  MAX_OPEN_PAGES = 3
 
   # The tool calls so far: { name:, arguments:, error: }
   attr_reader :calls
@@ -13,6 +14,7 @@ class AiAgents::ToolRunner
     @pages = pages
     @executor = executor
     @calls = []
+    @opened_pages = 0
   end
 
   def handed_off?
@@ -37,6 +39,9 @@ class AiAgents::ToolRunner
   private
 
   def open_page(arguments)
+    @opened_pages += 1
+    return { error: "You can open at most #{MAX_OPEN_PAGES} pages per reply" } if @opened_pages > MAX_OPEN_PAGES
+
     page = @pages.find_by(id: arguments['page_id'])
     return { error: 'There is no page with this id. Use an id from PAGES.' } unless page
 
@@ -65,7 +70,8 @@ class AiAgents::ToolRunner
     details = {
       'reason' => reason,
       'summary' => arguments['summary'].to_s.strip.presence,
-      'unanswered_question' => arguments['unanswered_question'].to_s.squish.presence
+      'unanswered_question' => arguments['unanswered_question'].to_s.squish.presence,
+      'visitor_question' => arguments['visitor_question'].to_s.squish.presence
     }
     @hand_off ||= @executor.call('hand_off', details)
   end

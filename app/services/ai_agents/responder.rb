@@ -5,7 +5,8 @@
 #
 # A reply gets MAX_TOOL_ROUNDS rounds with every tool. If it hasn't handed off by then, a newer model gets one more round
 # in which it can only hand off, so a visitor who accepted a handoff still gets it when the model spent its rounds on
-# other tools. Then the model can't call tools, so the loop always ends with a reply.
+# other tools. Then the model can't call tools, so the loop always ends with a reply: at most six requests with the
+# corrective retry, and none starts after DEADLINE_SECONDS.
 #
 # The request is stateless (store: false), so every round resends the whole input plus the output items of the earlier
 # rounds, reasoning items included, and the function_call_output items. Stateless responses carry the encrypted reasoning
@@ -22,9 +23,12 @@ class AiAgents::Responder
   MAX_TOOL_ROUNDS = 3
   # allowed_tools keeps the tools list, and so the cached prompt prefix, unchanged; older models get no such round
   HAND_OFF_ONLY = { type: 'allowed_tools', mode: 'auto', tools: [{ type: 'function', name: 'hand_off' }] }.freeze
-  # The most requests of a reply: the tool rounds, the hand_off round, the reply and the reply after the correction
-  MAX_REQUESTS = MAX_TOOL_ROUNDS + 3
   TIMEOUT_SECONDS = 45
+  # No request starts later, so a reply ends well within the reply lock (AgentBots::AiAgentReplyJob::LOCK_TIMEOUT)
+  DEADLINE_SECONDS = 240
+  MAX_OUTPUT_TOKENS = 8_000
+  # A page whose fetches keep failing drops out once its last fetched content is this old
+  PAGE_MAX_AGE = 7.days
   CORRECTION = 'Your reply was not sent because %<problems>s. Cite in entry_keys and page_ids the knowledge base entries or pages ' \
                "you used, or say you don't have a confirmed answer and offer to pass the question to the team.".freeze
 
@@ -47,6 +51,7 @@ class AiAgents::Responder
   def perform
     raise Error, 'The OpenAI integration of the account is not enabled' if hook.blank?
 
+    @started_at = Time.current
     context = { role: 'developer', content: prompt.context_message(visitor: @visitor, team_available: @team_available) }
     input = [static_message, context, *@history]
     output = complete(input)
@@ -86,9 +91,9 @@ class AiAgents::Responder
     @pages ||= readable_pages.select(:id, :title, :url).to_a
   end
 
-  # Pages with content, whatever their status: a refresh (pending) or a failed fetch keeps the content of the last fetch
+  # Pages with recent content, whatever their status: a refresh (pending) or a failed fetch keeps the last fetched content
   def readable_pages
-    @agent_bot.pages.where.not(content: [nil, ''])
+    @agent_bot.pages.where.not(content: [nil, '']).where(fetched_at: PAGE_MAX_AGE.ago..)
   end
 
   def prompt
@@ -125,6 +130,8 @@ class AiAgents::Responder
   end
 
   def request(input, tool_choice)
+    raise Error, "OpenAI didn't finish the reply within #{DEADLINE_SECONDS} seconds" if Time.current - @started_at > DEADLINE_SECONDS
+
     response, body = client.create(request_body(input, tool_choice))
     raise Error, body.dig('error', 'message').presence || "OpenAI failed with HTTP #{response.status}" unless response.success?
 
@@ -141,6 +148,7 @@ class AiAgents::Responder
       tools: AiAgents::Prompt::TOOLS,
       tool_choice: tool_choice,
       text: { format: AiAgents::Prompt::OUTPUT_FORMAT },
+      max_output_tokens: MAX_OUTPUT_TOKENS,
       store: false,
       # Routes requests with the same static prompt together and accounts their cache use per bot
       prompt_cache_key: "ai-agent-bot-#{@agent_bot.id}"

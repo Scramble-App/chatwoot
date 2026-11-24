@@ -108,7 +108,7 @@ RSpec.describe AiAgents::Evaluation do
 
     turn_requests = requests.select { |body| body['input'].last['role'] == 'user' }
     expect(turn_requests.map { |body| body['input'].second['content'][/Brand or company: .*/] })
-      .to eq(['Brand or company: unknown', 'Brand or company: GreenSip', 'Brand or company: unknown'])
+      .to eq(['Brand or company: unknown', 'Brand or company: "GreenSip"', 'Brand or company: unknown'])
     sc_handoff = report[:scenarios].find { |scenario| scenario[:id] == 'sc-handoff' }
     expect(sc_handoff[:turns].pluck(:passed, :skipped)).to eq([[true, nil], [false, true]])
     expect(report[:cases]).to be_empty

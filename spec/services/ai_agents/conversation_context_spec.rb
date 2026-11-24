@@ -14,14 +14,17 @@ RSpec.describe AiAgents::ConversationContext do
   let(:context) { described_class.new(conversation: conversation, message: message, team: team) }
 
   describe '#visitor' do
-    it 'treats a generated widget name as unknown and says only whether the email is known' do
-      expect(context.visitor).to eq(name: nil, company: nil, email_known: false, browser_language: 'de')
+    it 'knows nothing the visitor did not give in this conversation, and only whether an email is known' do
+      contact.update!(name: 'Jane Doe', email: 'jane@bigbrand.test', additional_attributes: { 'company_name' => 'BigBrand' })
+
+      expect(context.visitor).to eq(name: nil, company: nil, email_known: true, browser_language: 'de')
     end
 
-    it 'gives the name, company and email status the contact has' do
-      contact.update!(name: 'Anna', email: 'anna@example.test', additional_attributes: { 'company_name' => 'GreenSip' })
+    it 'gives the name and company the visitor gave the agent' do
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_agent_visitor' => { 'name' => 'Anna',
+                                                                                                                   'company' => 'GreenSip' }))
 
-      expect(context.visitor).to eq(name: 'Anna', company: 'GreenSip', email_known: true, browser_language: 'de')
+      expect(context.visitor).to eq(name: 'Anna', company: 'GreenSip', email_known: false, browser_language: 'de')
     end
   end
 

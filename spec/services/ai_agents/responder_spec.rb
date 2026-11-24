@@ -6,7 +6,9 @@ RSpec.describe AiAgents::Responder do
   let(:account) { create(:account) }
   let(:bot_config) { { 'model' => 'gpt-agent-spec' } }
   let(:agent_bot) { create(:agent_bot, :ai_agent, account: account, bot_config: bot_config) }
-  let!(:page) { create(:agent_bot_page, agent_bot: agent_bot, title: 'Plans', status: :fetched, content: 'The sample plan text.') }
+  let!(:page) do
+    create(:agent_bot_page, agent_bot: agent_bot, title: 'Plans', status: :fetched, content: 'The sample plan text.', fetched_at: 1.hour.ago)
+  end
   let(:executor_calls) { [] }
   let(:executor) do
     lambda do |name, arguments|
@@ -39,7 +41,7 @@ RSpec.describe AiAgents::Responder do
     responder.perform
 
     body = requests.first
-    expect(body).to include('model' => 'gpt-agent-spec', 'store' => false, 'tool_choice' => 'auto',
+    expect(body).to include('model' => 'gpt-agent-spec', 'store' => false, 'tool_choice' => 'auto', 'max_output_tokens' => 8000,
                             'reasoning' => { 'effort' => AiAgents::Settings::DEFAULT_REASONING_EFFORT })
     expect(body.keys).not_to include('previous_response_id', 'include', 'instructions')
     expect(body['prompt_cache_key']).to eq("ai-agent-bot-#{agent_bot.id}")
@@ -57,7 +59,7 @@ RSpec.describe AiAgents::Responder do
     expect(static_text(body)).to start_with('FIXED RULES').and include('#KB-001 Basics | How does it work?', "[#{page.id}] Plans — #{page.url}")
     expect(static_text(body)).not_to include('A draft question?', 'Never fetched')
     expect(body['input'].second).to include('role' => 'developer')
-    expect(body['input'].second['content']).to include('- Brand or company: GreenSip', '- Email: unknown', '- Browser language: de')
+    expect(body['input'].second['content']).to include('- Brand or company: "GreenSip"', '- Email: unknown', '- Browser language: de')
     expect(body['input'].drop(2)).to eq(history.map(&:stringify_keys))
   end
 
@@ -91,9 +93,9 @@ RSpec.describe AiAgents::Responder do
     expect(result.usage).to include(requests: 2, input_tokens: 200, cached_input_tokens: 80, cache_write_tokens: 20)
   end
 
-  it 'reads the pages with content, also while a refresh is pending or after a failed fetch' do
-    refreshing = create(:agent_bot_page, agent_bot: agent_bot, title: nil, status: :pending, content: 'Refreshing text.')
-    failed = create(:agent_bot_page, agent_bot: agent_bot, title: 'Failed', status: :failed, content: 'Previous text.')
+  it 'reads the pages with content from the last week, also while a refresh is pending or after a failed fetch' do
+    refreshing = create(:agent_bot_page, agent_bot: agent_bot, title: nil, status: :pending, content: 'Refreshing text.', fetched_at: 6.days.ago)
+    failed = create(:agent_bot_page, agent_bot: agent_bot, title: 'Failed', status: :failed, content: 'Previous text.', fetched_at: 1.day.ago)
     requests = stub_openai_responses(openai_tool_calls(['open_page', { page_id: failed.id }]),
                                      openai_reply(kind: 'answer', page_ids: [refreshing.id, failed.id]))
 
@@ -102,6 +104,27 @@ RSpec.describe AiAgents::Responder do
     expect(static_text(requests.first)).to include("[#{refreshing.id}] #{refreshing.url}\n[#{failed.id}] Failed — #{failed.url}")
     expect(tool_outputs(requests.second).values).to eq([{ 'title' => 'Failed', 'url' => failed.url, 'content' => 'Previous text.' }])
     expect(result.grounded).to be(true)
+  end
+
+  it 'leaves out a page whose last fetched content is older than a week' do
+    stale = create(:agent_bot_page, agent_bot: agent_bot, title: 'Stale', status: :failed, content: 'Old text.', fetched_at: 8.days.ago)
+    requests = stub_openai_responses(openai_tool_calls(['open_page', { page_id: stale.id }]), openai_reply(kind: 'answer', page_ids: [stale.id]))
+
+    result = responder.perform
+
+    expect(static_text(requests.first)).not_to include('Stale')
+    expect(tool_outputs(requests.second).values).to eq([{ 'error' => 'There is no page with this id. Use an id from PAGES.' }])
+    expect(result.grounded).to be(false)
+  end
+
+  it 'opens at most three pages per reply' do
+    requests = stub_openai_responses(openai_tool_calls(*Array.new(4) { ['open_page', { page_id: page.id }] }), openai_reply)
+
+    responder.perform
+
+    expect(tool_outputs(requests.second).values.last(2)).to eq(
+      [{ 'title' => 'Plans', 'url' => page.url, 'content' => 'The sample plan text.' }, { 'error' => 'You can open at most 3 pages per reply' }]
+    )
   end
 
   it 'returns errors to the model for a page it may not open and an invalid email, without calling the executor' do
@@ -121,14 +144,16 @@ RSpec.describe AiAgents::Responder do
   end
 
   it 'hands off once per reply' do
-    hand_off = { reason: 'no_answer', summary: 'Asked about crypto.', unanswered_question: ' Can loans be repaid in crypto? ' }
+    hand_off = { reason: 'no_answer', summary: 'Asked about crypto.', unanswered_question: ' Can loans be repaid in crypto? ',
+                 visitor_question: "Can we repay\n in crypto?" }
     requests = stub_openai_responses(openai_tool_calls(['hand_off', hand_off], ['hand_off', hand_off.merge(reason: 'unknown')]),
                                      openai_reply(kind: 'handoff'))
 
     responder.perform
 
     expect(executor_calls).to eq(
-      [['hand_off', { 'reason' => 'no_answer', 'summary' => 'Asked about crypto.', 'unanswered_question' => 'Can loans be repaid in crypto?' }]]
+      [['hand_off', { 'reason' => 'no_answer', 'summary' => 'Asked about crypto.', 'unanswered_question' => 'Can loans be repaid in crypto?',
+                      'visitor_question' => 'Can we repay in crypto?' }]]
     )
     expect(tool_outputs(requests.second).values).to eq([{ 'team_available' => true }] * 2)
   end
@@ -171,7 +196,9 @@ RSpec.describe AiAgents::Responder do
       result = responder.perform
 
       expect(requests.pluck('tool_choice').last(2)).to eq([hand_off_only, 'none'])
-      expect(executor_calls).to eq([['hand_off', { 'reason' => 'human_requested', 'summary' => 'Wants a person.', 'unanswered_question' => nil }]])
+      expect(executor_calls).to eq(
+        [['hand_off', { 'reason' => 'human_requested', 'summary' => 'Wants a person.', 'unanswered_question' => nil, 'visitor_question' => nil }]]
+      )
       expect(result.to_h).to include(kind: 'handoff')
       expect(result.tool_calls.pluck(:name)).to eq(%w[open_page open_page open_page hand_off])
     end
@@ -284,6 +311,18 @@ RSpec.describe AiAgents::Responder do
       stub_openai_responses(openai_reply.merge(status: 'incomplete', incomplete_details: { reason: 'content_filter' }))
 
       expect { responder.perform }.to raise_error(described_class::Error, 'OpenAI stopped before finishing the reply (content_filter)')
+    end
+
+    it 'raises when the reply takes too long, without starting another request' do
+      requests = []
+      stub_request(:post, AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL).to_return do |request|
+        requests << request
+        travel(described_class::DEADLINE_SECONDS + 1)
+        { status: 200, body: openai_tool_calls(['open_page', { page_id: page.id }]).to_json }
+      end
+
+      expect { responder.perform }.to raise_error(described_class::Error, "OpenAI didn't finish the reply within 240 seconds")
+      expect(requests.size).to eq(1)
     end
 
     it 'raises without an enabled OpenAI integration' do

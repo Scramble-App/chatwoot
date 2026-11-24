@@ -5,8 +5,8 @@ class AgentBots::AiAgentReplyJob < MutexApplicationJob
   queue_as :high
 
   LOCK_KEY = 'AI_AGENT_REPLY_LOCK::%<conversation_id>d'.freeze
-  # Outlasts the longest reply: AiAgents::Responder::MAX_REQUESTS OpenAI calls of up to TIMEOUT_SECONDS each, and a minute
-  LOCK_TIMEOUT = (AiAgents::Responder::MAX_REQUESTS * AiAgents::Responder::TIMEOUT_SECONDS).seconds + 1.minute
+  # Outlasts the longest reply: no OpenAI request starts after the responder's deadline, and one takes TIMEOUT_SECONDS at most
+  LOCK_TIMEOUT = (AiAgents::Responder::DEADLINE_SECONDS + AiAgents::Responder::TIMEOUT_SECONDS + 60).seconds
 
   retry_on LockAcquisitionError, wait: 3.seconds, attempts: 100 do |job, _error|
     Rails.logger.warn("[ai-agent] gave up waiting for the reply lock of message #{job.arguments.second}")
@@ -18,29 +18,9 @@ class AgentBots::AiAgentReplyJob < MutexApplicationJob
     return if agent_bot.nil? || message.nil?
 
     with_lock(format(LOCK_KEY, conversation_id: message.conversation_id), LOCK_TIMEOUT) do
-      AiAgents::ReplyService.new(agent_bot: agent_bot, message: message).perform if replyable?(agent_bot, message)
+      next unless AiAgents::ReplyConditions.new(agent_bot: agent_bot, message: message).met?
+
+      AiAgents::ReplyService.new(agent_bot: agent_bot, message: message).perform
     end
-  end
-
-  private
-
-  def replyable?(agent_bot, message)
-    conversation = message.conversation
-    agent_bot.ai_agent? && active_bot?(agent_bot, conversation) && conversation.pending? && conversation.assignee_id.nil? &&
-      awaiting_reply?(agent_bot, message)
-  end
-
-  def active_bot?(agent_bot, conversation)
-    return true if conversation.assignee_agent_bot_id == agent_bot.id
-
-    agent_bot_inbox = conversation.inbox.agent_bot_inbox
-    agent_bot_inbox.present? && agent_bot_inbox.active? && agent_bot_inbox.agent_bot_id == agent_bot.id
-  end
-
-  # The latest incoming public message, not answered by the bot yet (a retried job must not reply twice)
-  def awaiting_reply?(agent_bot, message)
-    public_messages = message.conversation.messages.where(private: false)
-    public_messages.incoming.reorder(id: :desc).pick(:id) == message.id &&
-      !public_messages.outgoing.where(sender: agent_bot).exists?(['messages.id > ?', message.id])
   end
 end

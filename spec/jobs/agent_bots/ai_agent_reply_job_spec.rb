@@ -1,6 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe AgentBots::AiAgentReplyJob do
+  include AiAgentOpenaiHelpers
+
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account, enable_email_collect: false) }
   let(:agent_bot) { create(:agent_bot, :ai_agent, account: account) }
@@ -38,6 +40,17 @@ RSpec.describe AgentBots::AiAgentReplyJob do
   it 'replies as the bot assigned to the conversation' do
     agent_bot_inbox.update!(status: :inactive)
     conversation.update!(assignee_agent_bot: agent_bot)
+
+    perform
+
+    expect(reply_service).to have_received(:perform)
+  end
+
+  it 'replies when the later bot message answers an earlier visitor message' do
+    earlier = create(:message, conversation: conversation, account: account, inbox: inbox, sender: contact, content: 'Hello')
+    message
+    create(:message, conversation: conversation, account: account, inbox: inbox, sender: agent_bot, message_type: :outgoing,
+                     content_attributes: { ai_agent_reply_to: earlier.id })
 
     perform
 
@@ -84,7 +97,8 @@ RSpec.describe AgentBots::AiAgentReplyJob do
 
     it 'skips a message the bot already replied to' do
       message
-      create(:message, conversation: conversation, account: account, inbox: inbox, sender: agent_bot, message_type: :outgoing)
+      create(:message, conversation: conversation, account: account, inbox: inbox, sender: agent_bot, message_type: :outgoing,
+                       content_attributes: { ai_agent_reply_to: message.id })
 
       expect_no_reply
     end
@@ -112,5 +126,61 @@ RSpec.describe AgentBots::AiAgentReplyJob do
 
     expect { perform }.to raise_error(ActiveRecord::RecordInvalid)
     expect(Redis::LockManager.new.locked?(lock_key)).to be(false)
+  end
+
+  context 'with the real reply' do
+    let(:team) { create(:team, account: account, allow_auto_assign: false) }
+    let(:agent_bot) { create(:agent_bot, :ai_agent, account: account, bot_config: { 'model' => 'gpt-agent-spec', 'handoff_team_id' => team.id }) }
+
+    before do
+      allow(AiAgents::ReplyService).to receive(:new).and_call_original
+      create_ai_agent_openai_hook(account)
+      allow(OnlineStatusTracker).to receive(:get_available_users).and_return({})
+    end
+
+    def bot_replies
+      conversation.messages.where(sender: agent_bot, private: false)
+    end
+
+    it 'answers a message sent while the reply to an earlier one was decided, once, with both in the history' do
+      follow_up = nil
+      user_inputs = []
+      stub_request(:post, AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL).to_return do |request|
+        user_inputs << JSON.parse(request.body)['input'].select { |item| item['role'] == 'user' }.pluck('content')
+        follow_up ||= create(:message, conversation: conversation, account: account, inbox: inbox, sender: contact, content: 'What does it cost?')
+        { status: 200, body: openai_reply(reply: 'It costs a flat fee.').to_json }
+      end
+
+      perform
+      # The job of the follow-up waited for the lock
+      described_class.perform_now(agent_bot.id, follow_up.id)
+
+      expect(user_inputs).to eq([['Hi'], ['Hi', 'What does it cost?']])
+      replies = bot_replies.map { |reply| [reply.content, reply.content_attributes['ai_agent_reply_to']] }
+      expect(replies).to eq([['It costs a flat fee.', follow_up.id]])
+    end
+
+    it 'completes a handoff that failed when the job runs again, with one reply' do
+      stub_openai_responses(openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.' }]),
+                            openai_reply(reply: 'A colleague will join shortly.', kind: 'handoff'))
+      handoffs = 0
+      allow(AiAgents::HandoffService).to receive(:new).and_wrap_original do |original, **arguments|
+        original.call(**arguments).tap do |handoff|
+          allow(handoff).to receive(:perform).and_wrap_original do |perform|
+            handoffs += 1
+            raise ActiveRecord::Deadlocked, 'deadlock detected' if handoffs == 1
+
+            perform.call
+          end
+        end
+      end
+
+      expect { perform }.to raise_error(ActiveRecord::Deadlocked)
+      expect(bot_replies).to be_empty
+      perform
+
+      expect(conversation.reload).to have_attributes(status: 'open', team: team, label_list: ['ai-handoff'])
+      expect(bot_replies.pluck(:content)).to eq(['A colleague will join shortly.'])
+    end
   end
 end

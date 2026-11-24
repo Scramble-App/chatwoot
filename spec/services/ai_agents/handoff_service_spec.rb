@@ -9,8 +9,12 @@ RSpec.describe AiAgents::HandoffService do
   let(:message) { create(:message, conversation: conversation, account: account, sender: contact, content: 'Can we repay in crypto?') }
   let(:dispatcher) { Rails.configuration.dispatcher }
 
-  def hand_off(reason: 'no_answer', **)
-    described_class.new(agent_bot: agent_bot, message: message, reason: reason, **).perform
+  def handoff(reason: 'no_answer', **)
+    described_class.new(agent_bot: agent_bot, message: message, reason: reason, **)
+  end
+
+  def hand_off(...)
+    handoff(...).perform
   end
 
   it 'sets the team, labels the conversation, leaves a note and opens the conversation, in this order' do
@@ -31,7 +35,8 @@ RSpec.describe AiAgents::HandoffService do
   end
 
   it 'leaves a private note from the bot with what the team needs' do
-    hand_off(summary: 'Asked whether loans can be repaid in crypto.', unanswered_question: 'Can loans be repaid in crypto?', language: 'en')
+    expect(hand_off(summary: 'Asked whether loans can be repaid in crypto.', unanswered_question: 'Can loans be repaid in crypto?', language: 'en'))
+      .to be(true)
 
     note = conversation.messages.where(private: true).last
     expect(note).to have_attributes(message_type: 'outgoing', sender: agent_bot)
@@ -87,24 +92,42 @@ RSpec.describe AiAgents::HandoffService do
     expect(conversation.reload).to have_attributes(team: nil, status: 'open')
   end
 
-  it 'records the unanswered question for no_answer' do
-    recorder = instance_double(AiAgents::UnansweredRecorder, perform: nil)
-    allow(AiAgents::UnansweredRecorder).to receive(:new).and_return(recorder)
+  it 'changes nothing when an agent took the conversation over or it was resolved in the meantime' do
+    agent = create(:user, account: account, role: :agent)
+    conversation.update!(assignee: agent)
+    other = create(:conversation, account: account, contact: contact, status: :pending)
+    resolved_message = create(:message, conversation: other, account: account, sender: contact, content: 'Thanks')
+    other.update!(status: :resolved)
 
-    hand_off(unanswered_question: 'Can loans be repaid in crypto?')
-
-    expect(AiAgents::UnansweredRecorder).to have_received(:new)
-      .with(agent_bot: agent_bot, conversation: conversation, message: message, question: 'Can loans be repaid in crypto?')
-    expect(recorder).to have_received(:perform)
+    expect(hand_off(reason: 'human_requested')).to be(false)
+    expect(described_class.new(agent_bot: agent_bot, message: resolved_message, reason: 'other').perform).to be(false)
+    expect(conversation.reload).to have_attributes(status: 'pending', assignee: agent, team: nil, label_list: [])
+    expect(other.reload).to have_attributes(status: 'resolved', label_list: [])
+    expect(Message.where(sender: agent_bot)).to be_empty
   end
 
-  it 'records the last visitor message when the model gave no unanswered question' do
-    hand_off
+  describe '#record_unanswered_question' do
+    it 'records the question with the visitor wording for no_answer' do
+      recorder = instance_double(AiAgents::UnansweredRecorder, perform: nil)
+      allow(AiAgents::UnansweredRecorder).to receive(:new).and_return(recorder)
 
-    expect(agent_bot.knowledge_entries.needs_answer.pluck(:question)).to eq(['Can we repay in crypto?'])
-  end
+      handoff(unanswered_question: 'Can loans be repaid in crypto?', visitor_question: 'Can we repay in crypto?').record_unanswered_question
 
-  it 'records nothing for other reasons' do
-    expect { hand_off(reason: 'limit') }.not_to change(AgentBotKnowledgeEntry, :count)
+      expect(AiAgents::UnansweredRecorder).to have_received(:new).with(
+        agent_bot: agent_bot, conversation: conversation, message: message, question: 'Can loans be repaid in crypto?',
+        visitor_question: 'Can we repay in crypto?'
+      )
+      expect(recorder).to have_received(:perform)
+    end
+
+    it 'records the last visitor message when the model gave no unanswered question' do
+      handoff.record_unanswered_question
+
+      expect(agent_bot.knowledge_entries.needs_answer.pluck(:question)).to eq(['Can we repay in crypto?'])
+    end
+
+    it 'records nothing for other reasons' do
+      expect { handoff(reason: 'limit').record_unanswered_question }.not_to change(AgentBotKnowledgeEntry, :count)
+    end
   end
 end

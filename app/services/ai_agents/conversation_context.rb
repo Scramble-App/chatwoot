@@ -3,19 +3,20 @@
 class AiAgents::ConversationContext
   HISTORY_LIMIT = 30
   MESSAGE_LIMIT = 2_000
-  # Widget contacts get a Haikunator name, such as bold-river-421, until the visitor gives their own
-  GENERATED_NAME = /\A[a-z]+-[a-z]+-\d+\z/
+  # Conversation additional attribute with the name and company the visitor gave the agent (save_contact)
+  VISITOR_DETAILS = 'ai_agent_visitor'.freeze
 
   # team: the handoff team of the bot, or nil
   pattr_initialize [:conversation!, :message!, :team]
 
-  # Never the email address itself, only whether it is known
+  # The name and company only as the visitor gave them in this conversation: an email can merge the visitor into another
+  # customer's contact. Whether an email is known reveals nothing; the address itself is never given.
   def visitor
-    contact = conversation.contact
+    given = conversation.additional_attributes&.dig(VISITOR_DETAILS) || {}
     {
-      name: contact.name.to_s.match?(GENERATED_NAME) ? nil : contact.name.presence,
-      company: contact.additional_attributes&.dig('company_name').presence,
-      email_known: contact.email.present?,
+      name: given['name'].presence,
+      company: given['company'].presence,
+      email_known: conversation.contact.email.present?,
       browser_language: conversation.additional_attributes&.dig('browser_language').presence
     }
   end

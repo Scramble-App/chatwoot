@@ -32,6 +32,21 @@ describe AgentBotListener do
         listener.message_created(event)
       end
 
+      it 'sends message to an agent bot without a bot type' do
+        agent_bot.update!(bot_type: nil)
+        create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+        expect(AgentBots::WebhookJob).to receive(:perform_later).once
+        listener.message_created(event)
+      end
+
+      it 'keeps the conversation of a webhook bot pending when an agent replies' do
+        create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+        conversation.update!(status: :pending, assignee: nil)
+        allow(AgentBots::WebhookJob).to receive(:perform_later)
+        listener.message_created(event)
+        expect(conversation.reload.status).to eq('pending')
+      end
+
       it 'does not send message to agent bot if url is empty' do
         agent_bot = create(:agent_bot, outgoing_url: '')
         create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
@@ -224,6 +239,25 @@ describe AgentBotListener do
       ]
 
       expect { events.each { |event| listener.message_created(event) } }.not_to have_enqueued_job(AgentBots::AiAgentReplyJob)
+    end
+
+    it 'opens a pending conversation when a team member answers the visitor, so the AI agent stops' do
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user))
+
+      expect(conversation.reload.status).to eq('open')
+      expect(conversation.label_list).to be_empty
+      expect(conversation.messages.where(private: true)).to be_empty
+    end
+
+    it 'keeps the conversation pending for private notes and messages of the bot' do
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user, private: true))
+      listener.message_created(message_event(message_type: :outgoing, sender: ai_agent_bot))
+
+      expect(conversation.reload.status).to eq('pending')
     end
 
     it 'sends no webhook events' do

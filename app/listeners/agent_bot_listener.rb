@@ -40,9 +40,10 @@ class AgentBotListener < BaseListener
 
     method_name = __method__.to_s
     agent_bots_for(inbox, message.conversation).each do |agent_bot|
-      next enqueue_ai_agent_reply(agent_bot, message) if agent_bot.ai_agent?
+      next process_message_event(method_name, agent_bot, message, event) unless agent_bot.ai_agent?
 
-      process_message_event(method_name, agent_bot, message, event)
+      enqueue_ai_agent_reply(agent_bot, message)
+      open_for_human_reply(message)
     end
   end
 
@@ -87,15 +88,23 @@ class AgentBotListener < BaseListener
     AgentBots::AiAgentReplyJob.perform_later(agent_bot.id, message.id)
   end
 
+  # A team member answered the visitor, so the AI agent stops: the conversation opens, without the AI handoff note or label
+  def open_for_human_reply(message)
+    conversation = message.conversation
+    return unless message.outgoing? && !message.private? && message.sender_type == 'User' && conversation.pending?
+
+    conversation.open!
+  end
+
   def process_message_event(method_name, agent_bot, message, _event)
     # Only webhook bots are supported
     payload = message.webhook_data.merge(event: method_name)
     process_webhook_bot_event(agent_bot, payload)
   end
 
-  # Only webhook bots get events: a bot switched to ai_agent can still have its old outgoing_url
+  # AI agent bots get no events, even with the outgoing_url of a bot switched from webhook
   def process_webhook_bot_event(agent_bot, payload)
-    return unless agent_bot.webhook?
+    return if agent_bot.ai_agent?
     return if agent_bot.outgoing_url.blank?
 
     AgentBots::WebhookJob.perform_later(agent_bot.outgoing_url, payload, :agent_bot_webhook,

@@ -1,22 +1,35 @@
 # Passes a conversation from the AI agent to the team: sets the handoff team first, so assignment considers it, labels the
-# conversation, leaves a private note for the team, opens the conversation through bot_handoff! and, when the knowledge
-# base had no answer, records the unanswered question.
+# conversation, leaves a private note for the team and opens the conversation through bot_handoff!. When the knowledge
+# base had no answer, record_unanswered_question then records the question, after the reply is posted.
 class AiAgents::HandoffService
   LABEL = 'ai-handoff'.freeze
   NOTE_QUESTION_LIMIT = 1_000
 
   # reason: no_answer, human_requested or other from the model, or limit, error or ungrounded from the reply service.
   # message: the visitor message being answered; language: of the agent's reply, if there was one.
-  pattr_initialize [:agent_bot!, :message!, :reason!, { summary: nil, unanswered_question: nil, language: nil }]
+  pattr_initialize [:agent_bot!, :message!, :reason!, { summary: nil, unanswered_question: nil, visitor_question: nil, language: nil }]
 
+  # False, changing nothing, when an agent took the conversation over or it was closed in the meantime
   def perform
-    # The reply that came before can have changed the conversation (waiting_since) and save_contact its contact
+    # save_contact can have moved the conversation to another contact
     conversation.reload
+    return false unless conversation.pending? && conversation.assignee_id.nil?
+
     assign_team
     conversation.add_labels([label.title])
     create_note
     conversation.bot_handoff!
-    record_unanswered_question if reason == 'no_answer'
+    true
+  end
+
+  def record_unanswered_question
+    return unless reason == 'no_answer'
+
+    question = unanswered_question.presence || message.content.to_s.squish.presence
+    return if question.blank?
+
+    AiAgents::UnansweredRecorder.new(agent_bot: agent_bot, conversation: conversation, message: message, question: question,
+                                     visitor_question: visitor_question).perform
   end
 
   private
@@ -50,12 +63,11 @@ class AiAgents::HandoffService
   end
 
   def note
-    contact = conversation.contact
     facts = {
       reason: I18n.t("ai_agents.handoff.reasons.#{reason}"),
       question: note_question,
-      company: contact.additional_attributes&.dig('company_name'),
-      email: contact.email,
+      company: company,
+      email: conversation.contact.email,
       language: language
     }
     lines = facts.map { |name, value| I18n.t("ai_agents.handoff.note.#{name}", name => value.presence || I18n.t('ai_agents.handoff.unknown')) }
@@ -63,16 +75,15 @@ class AiAgents::HandoffService
     [I18n.t('ai_agents.handoff.note.title'), *lines].join("\n")
   end
 
+  # The company the visitor gave in this conversation comes first: an email can have merged them into another contact
+  def company
+    conversation.additional_attributes&.dig(AiAgents::ConversationContext::VISITOR_DETAILS, 'company').presence ||
+      conversation.contact.additional_attributes&.dig('company_name')
+  end
+
   # The English question the model couldn't answer, otherwise what the visitor wrote last
   def note_question
     question = unanswered_question if reason == 'no_answer'
     (question.presence || message.content).to_s.squish.truncate(NOTE_QUESTION_LIMIT)
-  end
-
-  def record_unanswered_question
-    question = unanswered_question.presence || message.content.to_s.squish.presence
-    return if question.blank?
-
-    AiAgents::UnansweredRecorder.new(agent_bot: agent_bot, conversation: conversation, message: message, question: question).perform
   end
 end

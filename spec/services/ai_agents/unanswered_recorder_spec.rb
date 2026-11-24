@@ -5,19 +5,27 @@ RSpec.describe AiAgents::UnansweredRecorder do
   let(:agent_bot) { create(:agent_bot, :ai_agent, account: account) }
   let(:conversation) { create(:conversation, account: account, status: :pending) }
   let(:contact) { conversation.contact }
-  let!(:question_message) do
-    create(:message, conversation: conversation, account: account, sender: contact, content: 'Can we repay the loan in crypto, like USDT?')
+  let!(:question_message) { visitor_message('Can we repay the loan in crypto, like USDT?') }
+  let!(:message) { visitor_message('Sure, hello@greensip.test') }
+  let(:recorder) { recorder_for }
+
+  def visitor_message(content)
+    create(:message, conversation: conversation, account: account, sender: contact, content: content)
   end
-  let!(:message) { create(:message, conversation: conversation, account: account, sender: contact, content: 'Sure, hello@greensip.test') }
-  let(:recorder) do
-    described_class.new(agent_bot: agent_bot, conversation: conversation, message: message, question: 'Can loans be repaid in crypto?')
+
+  def recorder_for(question: 'Can loans be repaid in crypto?', visitor_question: nil, to: message)
+    described_class.new(agent_bot: agent_bot, conversation: conversation, message: to, question: question, visitor_question: visitor_question)
   end
 
   def needs_answer_entry(question)
     create(:agent_bot_knowledge_entry, agent_bot: agent_bot, question: question, status: :needs_answer, short_answer: nil, answer: nil)
   end
 
-  it 'creates a needs_answer entry with the visitor wording most similar to the question' do
+  def recorded_wording(...)
+    recorder_for(...).perform.questions.last.content
+  end
+
+  it 'creates a needs_answer entry with the latest visitor message that asks something, not one that only gives an email' do
     freeze_time do
       entry = recorder.perform
 
@@ -73,5 +81,44 @@ RSpec.describe AiAgents::UnansweredRecorder do
 
     expect { recorder.perform }.to raise_error(ActiveRecord::RecordNotUnique)
     expect(agent_bot.knowledge_entries).to have_received(:create!).exactly(3).times
+  end
+
+  context 'with a conversation in another language' do
+    let(:question) { 'How is the payout of a refinancing loan calculated?' }
+    let(:accepted) { visitor_message('Да, передайте, пожалуйста') }
+
+    before do
+      # The oldest message shares a Latin acronym with English, the question is in the third one
+      visitor_message('Здравствуйте! В договоре вижу APR очень высокий, почему так?')
+      visitor_message('Понятно, спасибо')
+      visitor_message('Как считается сумма нового займа при рефинансировании?')
+    end
+
+    it 'stores the visitor words the model copied' do
+      copy = "как считается  сумма нового займа\nпри рефинансировании"
+
+      expect(recorded_wording(question: question, visitor_question: copy,
+                              to: accepted)).to eq('как считается сумма нового займа при рефинансировании')
+    end
+
+    it 'stores the copy when it holds a whole message that asks something' do
+      copy = 'Добрый день. Как считается сумма нового займа при рефинансировании?'
+
+      expect(recorded_wording(question: question, visitor_question: copy, to: accepted)).to eq(copy)
+    end
+
+    it 'falls back to the latest message that asks something when the copy is not in the conversation' do
+      expect(recorded_wording(question: question, visitor_question: question,
+                              to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
+      expect(recorded_wording(question: question, to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
+    end
+
+    it 'does not take a short reply for the whole copy' do
+      copy = 'Да, а как считается выплата? Понятно, спасибо'
+      visitor_message('Да')
+
+      expect(recorded_wording(question: question, visitor_question: copy,
+                              to: accepted)).to eq('Как считается сумма нового займа при рефинансировании?')
+    end
   end
 end
