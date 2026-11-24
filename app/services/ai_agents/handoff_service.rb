@@ -1,7 +1,7 @@
 # Passes a conversation from the AI agent to the team: leaves a private note for the team and, in one save, sets the
-# handoff team (so assignment considers it), the label and what bot_handoff! sets (waiting_since, status open). The caller
-# sends bot_handoff!'s event with dispatch_event once everything is committed and, when the knowledge base had no answer,
-# records the question with record_unanswered_question.
+# handoff team (so assignment considers it) or, when the conversation has it already, one of its agents, the label and
+# what bot_handoff! sets (waiting_since, status open). The caller sends bot_handoff!'s event with dispatch_event once
+# everything is committed and, when the knowledge base had no answer, records the question with record_unanswered_question.
 class AiAgents::HandoffService
   LABEL = 'ai-handoff'.freeze
   NOTE_QUESTION_LIMIT = 1_000
