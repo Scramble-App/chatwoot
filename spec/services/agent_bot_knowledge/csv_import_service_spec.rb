@@ -42,6 +42,19 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect(entries.first).to have_attributes(key: 'KB-001', question: 'Are there fees?', answer: 'No fees at all.', short_answer: 'No.')
     end
 
+    it 'reads a sheet that Excel saved with semicolons' do
+      csv = "ID;Вопрос;Короткий ответ;Статус\r\nKB-001;\"Fees, terms; and more?\";No, none.;draft\r\n"
+
+      expect(import(csv)).to eq(created: 1, updated: 0, errors: [])
+      expect(entries.first).to have_attributes(key: 'KB-001', question: 'Fees, terms; and more?', short_answer: 'No, none.', status: 'draft')
+    end
+
+    it 'keeps commas when they split the headers into more known columns' do
+      import("ID,Вопрос,\"Notes; misc\"\nKB-007,\"Fees; terms?\",ignored\n")
+
+      expect(entries.pluck(:key, :question)).to eq([['KB-007', 'Fees; terms?']])
+    end
+
     it 'rejects a file without any column of the sheet' do
       expect { import("Name,Email\nJane,jane@example.com\n") }
         .to raise_error(described_class::Error, /none of the knowledge base columns: ID, Категория/)

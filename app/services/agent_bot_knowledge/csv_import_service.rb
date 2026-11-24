@@ -7,6 +7,7 @@ class AgentBotKnowledge::CsvImportService
 
   MAX_FILE_SIZE = 5.megabytes
   MAX_ROWS = 5_000
+  COLUMN_SEPARATORS = [',', ';'].freeze
   KB_KEY = /\AKB-(\d+)\z/
   STATUSES = AgentBotKnowledgeEntry.statuses.keys.freeze
   # The export quotes a cell that starts with a formula character (CSVSafe), so the import removes that quote again
@@ -27,7 +28,8 @@ class AgentBotKnowledge::CsvImportService
   private
 
   def parse_rows
-    header, *lines = CSV.parse(read_content)
+    content = read_content
+    header, *lines = CSV.parse(content, col_sep: column_separator(content))
     columns = columns_for(header)
     rows = lines.each_with_index.filter_map do |cells, index|
       [index + 2, columns.transform_values { |position| clean(cells[position]) }] unless cells.all?(&:blank?)
@@ -48,6 +50,16 @@ class AgentBotKnowledge::CsvImportService
     raise Error, I18n.t('agent_bot_knowledge.import.invalid_encoding') unless content.valid_encoding?
 
     content.delete_prefix("\uFEFF")
+  end
+
+  # Excel with a Russian locale saves semicolons; the separator that finds more known headers wins, a comma on a tie
+  def column_separator(content)
+    header_line = content.each_line.first.to_s
+    COLUMN_SEPARATORS.max_by do |separator|
+      CSV.parse_line(header_line, col_sep: separator).to_a.count { |name| AgentBotKnowledge::CsvColumns.attribute_for(name) }
+    rescue CSV::MalformedCSVError
+      0
+    end
   end
 
   # Attribute => position of its first column; other columns are ignored
