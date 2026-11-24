@@ -149,6 +149,51 @@ RSpec.describe AiAgents::Responder do
     expect(responder.usage[:requests]).to eq(4)
   end
 
+  describe 'the hand_off round' do
+    let(:bot_config) { { 'model' => 'gpt-6.2-sol' } }
+    let(:open_page) { openai_tool_calls(['open_page', { page_id: page.id }]) }
+    let(:hand_off) { openai_tool_calls(['hand_off', { reason: 'human_requested', summary: 'Wants a person.', unanswered_question: nil }]) }
+    let(:hand_off_only) { JSON.parse(described_class::HAND_OFF_ONLY.to_json) }
+
+    it 'lets the model only hand off after the full tool rounds, with the same tools' do
+      requests = stub_openai_responses(open_page, open_page, open_page, openai_reply)
+
+      responder.perform
+
+      expect(requests.pluck('tool_choice')).to eq(['auto', 'auto', 'auto', hand_off_only])
+      expect(hand_off_only).to eq('type' => 'allowed_tools', 'mode' => 'auto', 'tools' => [{ 'type' => 'function', 'name' => 'hand_off' }])
+      expect(requests.pluck('tools').uniq).to eq([JSON.parse(AiAgents::Prompt::TOOLS.to_json)])
+    end
+
+    it 'runs a hand_off of that round, then lets the model reply without tools' do
+      requests = stub_openai_responses(open_page, open_page, open_page, hand_off, openai_reply(kind: 'handoff'))
+
+      result = responder.perform
+
+      expect(requests.pluck('tool_choice').last(2)).to eq([hand_off_only, 'none'])
+      expect(executor_calls).to eq([['hand_off', { 'reason' => 'human_requested', 'summary' => 'Wants a person.', 'unanswered_question' => nil }]])
+      expect(result.to_h).to include(kind: 'handoff')
+      expect(result.tool_calls.pluck(:name)).to eq(%w[open_page open_page open_page hand_off])
+    end
+
+    it 'adds no round when the reply already handed off' do
+      requests = stub_openai_responses(hand_off, open_page, open_page, openai_reply(kind: 'handoff'))
+
+      responder.perform
+
+      expect(requests.pluck('tool_choice')).to eq(%w[auto auto auto none])
+    end
+
+    it 'adds no round on older models' do
+      agent_bot.update!(bot_config: { 'model' => 'gpt-4.1-mini' })
+      requests = stub_openai_responses(open_page, open_page, open_page, openai_reply)
+
+      responder.perform
+
+      expect(requests.pluck('tool_choice')).to eq(%w[auto auto auto none])
+    end
+  end
+
   describe 'prompt caching' do
     def cache_settings(model)
       agent_bot.update!(bot_config: { 'model' => model })

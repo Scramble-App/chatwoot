@@ -5,8 +5,8 @@ class AgentBots::AiAgentReplyJob < MutexApplicationJob
   queue_as :high
 
   LOCK_KEY = 'AI_AGENT_REPLY_LOCK::%<conversation_id>d'.freeze
-  # A reply can take several OpenAI calls of up to 45 seconds each (tool rounds and a corrective retry)
-  LOCK_TIMEOUT = 5.minutes
+  # Outlasts the longest reply: AiAgents::Responder::MAX_REQUESTS OpenAI calls of up to TIMEOUT_SECONDS each, and a minute
+  LOCK_TIMEOUT = (AiAgents::Responder::MAX_REQUESTS * AiAgents::Responder::TIMEOUT_SECONDS).seconds + 1.minute
 
   retry_on LockAcquisitionError, wait: 3.seconds, attempts: 100 do |job, _error|
     Rails.logger.warn("[ai-agent] gave up waiting for the reply lock of message #{job.arguments.second}")

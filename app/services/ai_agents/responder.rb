@@ -1,6 +1,11 @@
 # Decides the reply of an AI agent bot without changing anything: builds the prompt, runs the OpenAI tool loop and checks
-# that the reply is grounded in the knowledge base or the pages. open_page only reads, so it runs here; save_contact and
-# hand_off go to the executor, which acts on them (AiAgents::ReplyService) or records them (AiAgents::Evaluation).
+# that the reply is grounded in the knowledge base or the pages. AiAgents::ToolRunner runs the tools: open_page reads,
+# save_contact and hand_off go to the executor, which acts on them (AiAgents::ReplyService) or records them
+# (AiAgents::Evaluation).
+#
+# A reply gets MAX_TOOL_ROUNDS rounds with every tool. If it hasn't handed off by then, a newer model gets one more round
+# in which it can only hand off, so a visitor who accepted a handoff still gets it when the model spent its rounds on
+# other tools. Then the model can't call tools, so the loop always ends with a reply.
 #
 # The request is stateless (store: false), so every round resends the whole input plus the output items of the earlier
 # rounds, reasoning items included, and the function_call_output items. Stateless responses carry the encrypted reasoning
@@ -15,14 +20,16 @@ class AiAgents::Responder
   Result = Struct.new(:reply, :kind, :language, :entry_keys, :page_ids, :grounded, :tool_calls, :usage, keyword_init: true)
 
   MAX_TOOL_ROUNDS = 3
+  # allowed_tools keeps the tools list, and so the cached prompt prefix, unchanged; older models get no such round
+  HAND_OFF_ONLY = { type: 'allowed_tools', mode: 'auto', tools: [{ type: 'function', name: 'hand_off' }] }.freeze
+  # The most requests of a reply: the tool rounds, the hand_off round, the reply and the reply after the correction
+  MAX_REQUESTS = MAX_TOOL_ROUNDS + 3
   TIMEOUT_SECONDS = 45
-  EMAIL_FORMAT = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
-  CONTACT_DETAIL_LIMIT = 255
   CORRECTION = 'Your reply was not sent because %<problems>s. Cite in entry_keys and page_ids the knowledge base entries or pages ' \
                "you used, or say you don't have a confirmed answer and offer to pass the question to the team.".freeze
 
-  # The tool calls ({ name:, arguments:, error: }) and the token usage so far, also after an Error
-  attr_reader :tool_calls, :usage
+  # The token usage so far, also after an Error
+  attr_reader :usage
 
   # visitor: { name:, company:, email_known:, browser_language: }, nil for unknown details
   # history: [{ role: 'user' | 'assistant', content: }], oldest first, ending with the visitor's message to reply to
@@ -32,8 +39,7 @@ class AiAgents::Responder
     @visitor = visitor
     @team_available = team_available
     @history = history
-    @executor = executor
-    @tool_calls = []
+    @tools = AiAgents::ToolRunner.new(pages: readable_pages, executor: executor)
     @tool_rounds = 0
     @usage = { requests: 0, input_tokens: 0, cached_input_tokens: 0, cache_write_tokens: 0, output_tokens: 0 }
   end
@@ -50,7 +56,12 @@ class AiAgents::Responder
       output = complete(input)
       problems = grounding_problems(output)
     end
-    Result.new(**output, grounded: problems.empty?, tool_calls: @tool_calls, usage: @usage)
+    Result.new(**output, grounded: problems.empty?, tool_calls: tool_calls, usage: @usage)
+  end
+
+  # The tool calls so far ({ name:, arguments:, error: }), also after an Error
+  def tool_calls
+    @tools.calls
   end
 
   def model
@@ -91,20 +102,30 @@ class AiAgents::Responder
   # Runs rounds until the model gives its final reply; output items and tool results are appended to the input
   def complete(input)
     loop do
-      body = request(input)
+      tool_choice = next_tool_choice
+      body = request(input, tool_choice)
       output_items = Array(body['output'])
       calls = output_items.select { |item| item['type'] == 'function_call' }
       input.concat(output_items)
       return parse_output(body) if calls.empty?
-      raise Error, 'OpenAI called tools after the last tool round' if @tool_rounds >= MAX_TOOL_ROUNDS
+      raise Error, 'OpenAI called tools after the last tool round' if tool_choice == 'none'
 
       @tool_rounds += 1
-      calls.each { |call| input << { type: 'function_call_output', call_id: call['call_id'], output: run_tool(call).to_json } }
+      calls.each { |call| input << { type: 'function_call_output', call_id: call['call_id'], output: @tools.run(call).to_json } }
     end
   end
 
-  def request(input)
-    response, body = client.create(request_body(input))
+  # The hand_off round needs allowed_tools, which came with the models that take explicit cache breakpoints
+  def next_tool_choice
+    return 'auto' if @tool_rounds < MAX_TOOL_ROUNDS
+    return 'none' if @tools.handed_off? || @hand_off_round || !AiAgents::Prompt.explicit_cache?(model)
+
+    @hand_off_round = true
+    HAND_OFF_ONLY
+  end
+
+  def request(input, tool_choice)
+    response, body = client.create(request_body(input, tool_choice))
     raise Error, body.dig('error', 'message').presence || "OpenAI failed with HTTP #{response.status}" unless response.success?
 
     add_usage(body)
@@ -113,13 +134,12 @@ class AiAgents::Responder
     raise Error, e.message
   end
 
-  # After the last tool round the model can't call tools, so the loop always ends with a reply
-  def request_body(input)
+  def request_body(input, tool_choice)
     body = {
       model: model,
       input: input,
       tools: AiAgents::Prompt::TOOLS,
-      tool_choice: @tool_rounds < MAX_TOOL_ROUNDS ? 'auto' : 'none',
+      tool_choice: tool_choice,
       text: { format: AiAgents::Prompt::OUTPUT_FORMAT },
       store: false,
       # Routes requests with the same static prompt together and accounts their cache use per bot
@@ -180,53 +200,5 @@ class AiAgents::Responder
 
   def uncited_answer?(output)
     output[:kind] == 'answer' && output[:entry_keys].empty? && output[:page_ids].empty?
-  end
-
-  def run_tool(call)
-    arguments = JSON.parse(call['arguments'].to_s)
-    result = case call['name']
-             when 'open_page' then open_page(arguments)
-             when 'save_contact' then save_contact(arguments)
-             when 'hand_off' then hand_off(arguments)
-             else { error: "There is no tool named #{call['name']}" }
-             end
-    @tool_calls << { name: call['name'], arguments: arguments, error: result[:error] }.compact
-    result
-  rescue JSON::ParserError
-    { error: 'The arguments are not valid JSON' }
-  end
-
-  def open_page(arguments)
-    page = readable_pages.find_by(id: arguments['page_id'])
-    return { error: 'There is no page with this id. Use an id from PAGES.' } unless page
-
-    { title: page.title, url: page.url, content: page.content }
-  end
-
-  def save_contact(arguments)
-    details = {
-      'name' => arguments['name'].to_s.squish.truncate(CONTACT_DETAIL_LIMIT).presence,
-      'company' => arguments['company'].to_s.squish.truncate(CONTACT_DETAIL_LIMIT).presence,
-      'email' => arguments['email'].to_s.strip.downcase.presence
-    }.compact
-    return { error: 'There is nothing to save' } if details.empty?
-    return { error: 'The email address is not valid. Ask the visitor to check it.' } if details['email'] && !valid_email?(details['email'])
-
-    @executor.call('save_contact', details)
-  end
-
-  def valid_email?(email)
-    email.length <= CONTACT_DETAIL_LIMIT && email.match?(EMAIL_FORMAT)
-  end
-
-  # A reply hands off once; a second call gets the result of the first
-  def hand_off(arguments)
-    reason = AiAgents::Prompt::HANDOFF_REASONS.include?(arguments['reason']) ? arguments['reason'] : 'other'
-    details = {
-      'reason' => reason,
-      'summary' => arguments['summary'].to_s.strip.presence,
-      'unanswered_question' => arguments['unanswered_question'].to_s.squish.presence
-    }
-    @hand_off ||= @executor.call('hand_off', details)
   end
 end
