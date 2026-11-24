@@ -122,6 +122,31 @@ RSpec.describe 'Agent Bot API', type: :request do
 
         expect(response).to have_http_status(:unauthorized)
       end
+
+      it 'creates an AI agent bot with settings sent as form data' do
+        team = create(:team, account: account)
+        post "/api/v1/accounts/#{account.id}/agent_bots",
+             headers: admin.create_new_auth_token,
+             params: { name: 'Assistant', bot_type: 'ai_agent',
+                       bot_config: { model: '', handoff_team_id: team.id.to_s, max_replies_per_conversation: '12' } }
+
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['bot_type']).to eq('ai_agent')
+        settings = AgentBot.find(response.parsed_body['id']).ai_agent_settings
+        expect(settings.handoff_team).to eq(team)
+        expect(settings.max_replies_per_conversation).to eq(12)
+      end
+
+      it 'rejects an AI agent bot with unknown settings' do
+        expect do
+          post "/api/v1/accounts/#{account.id}/agent_bots",
+               headers: admin.create_new_auth_token,
+               params: { name: 'Assistant', bot_type: 'ai_agent', bot_config: { webhook_url: 'https://example.com' } }
+        end.not_to change(AgentBot, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['message']).to eq('Bot config has unknown keys: webhook_url')
+      end
     end
   end
 

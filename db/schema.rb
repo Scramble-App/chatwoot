@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_15_090000) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_24_100000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -154,6 +154,53 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_15_090000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "account_id"
+  end
+
+  create_table "agent_bot_knowledge_entries", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "agent_bot_id", null: false
+    t.string "key", null: false
+    t.string "category"
+    t.string "frequency"
+    t.text "question", null: false
+    t.text "alternative_questions"
+    t.text "short_answer"
+    t.text "answer"
+    t.text "selling_point"
+    t.integer "status", default: 0, null: false
+    t.integer "asked_count", default: 0, null: false
+    t.datetime "last_asked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_agent_bot_knowledge_entries_on_account_id"
+    t.index ["agent_bot_id", "key"], name: "index_agent_bot_knowledge_entries_on_agent_bot_id_and_key", unique: true
+    t.index ["agent_bot_id", "status"], name: "index_agent_bot_knowledge_entries_on_agent_bot_id_and_status"
+  end
+
+  create_table "agent_bot_knowledge_questions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "agent_bot_id", null: false
+    t.bigint "knowledge_entry_id", null: false
+    t.bigint "conversation_id", null: false
+    t.text "content", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conversation_id"], name: "index_agent_bot_knowledge_questions_on_conversation_id"
+    t.index ["knowledge_entry_id"], name: "index_agent_bot_knowledge_questions_on_knowledge_entry_id"
+  end
+
+  create_table "agent_bot_pages", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "agent_bot_id", null: false
+    t.string "url", null: false
+    t.string "title"
+    t.text "content"
+    t.integer "status", default: 0, null: false
+    t.text "error_message"
+    t.datetime "fetched_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agent_bot_id", "url"], name: "index_agent_bot_pages_on_agent_bot_id_and_url", unique: true
   end
 
   create_table "agent_bots", force: :cascade do |t|
@@ -1461,6 +1508,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_15_090000) do
   add_foreign_key "account_user_working_hours", "accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "agent_bot_knowledge_entries", "accounts", on_delete: :cascade
+  add_foreign_key "agent_bot_knowledge_entries", "agent_bots", on_delete: :cascade
+  add_foreign_key "agent_bot_knowledge_questions", "accounts", on_delete: :cascade
+  add_foreign_key "agent_bot_knowledge_questions", "agent_bot_knowledge_entries", column: "knowledge_entry_id", on_delete: :cascade
+  add_foreign_key "agent_bot_knowledge_questions", "agent_bots", on_delete: :cascade
+  add_foreign_key "agent_bot_knowledge_questions", "conversations", on_delete: :cascade
+  add_foreign_key "agent_bot_pages", "accounts", on_delete: :cascade
+  add_foreign_key "agent_bot_pages", "agent_bots", on_delete: :cascade
   add_foreign_key "ai_generation_developer_reports", "accounts"
   add_foreign_key "ai_generation_developer_reports", "conversations"
   add_foreign_key "ai_generation_developer_reports", "users"

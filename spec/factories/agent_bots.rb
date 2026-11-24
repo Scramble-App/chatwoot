@@ -6,6 +6,12 @@ FactoryBot.define do
     bot_config { {} }
     bot_type { 'webhook' }
 
+    trait :ai_agent do
+      account
+      outgoing_url { nil }
+      bot_type { 'ai_agent' }
+    end
+
     trait :skip_validate do
       to_create { |instance| instance.save(validate: false) }
     end

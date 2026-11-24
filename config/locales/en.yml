@@ -56,6 +56,20 @@ en:
         invalid: is not a valid timezone
       support_email:
         invalid: is not a valid email address
+    agent_bots:
+      bot_config:
+        unknown_keys: 'has unknown keys: %{keys}'
+        text: '%{key} must be text of at most %{count} characters'
+        invalid: '%{key} is invalid'
+        range: '%{key} must be a whole number from %{min} to %{max}'
+        team: '%{key} must be a team of this account'
+    agent_bot_knowledge_entries:
+      answer:
+        required_to_publish: 'or short answer is required to publish the entry'
+    agent_bot_pages:
+      url:
+        invalid: 'must be an http or https link'
+      limit: 'A bot can have at most %{count} pages'
     validations:
       presence: must not be blank
     webhook:
