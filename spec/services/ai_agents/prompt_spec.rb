@@ -76,7 +76,7 @@ RSpec.describe AiAgents::Prompt do
       expect(hand_off[:required]).to eq(%w[reason summary unanswered_question visitor_question])
       expect(hand_off[:properties][:visitor_question]).to include(type: %w[string null])
       expect(described_class::FIXED_RULES).to include(
-        "For reason no_answer, also give visitor_question: the visitor's own words for that question, copied from their message."
+        "visitor_question: the visitor's own words for that question, copied from their message."
       )
     end
   end
