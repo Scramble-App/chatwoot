@@ -33,3 +33,19 @@ export const agentBotData = {
   bot_type: 'webhook',
   avatar: new File([''], 'filename'),
 };
+
+export const aiAgentBotData = {
+  name: 'Assistant',
+  description: 'Answers visitors',
+  outgoing_url: '',
+  bot_type: 'ai_agent',
+  bot_config: {
+    model: 'gpt-test-mini',
+    reasoning_effort: '',
+    tone_of_voice: '',
+    instructions: 'Keep replies short.',
+    handoff_team_id: null,
+    max_replies_per_conversation: 25,
+    fallback_message: '',
+  },
+};

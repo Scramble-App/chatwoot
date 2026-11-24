@@ -3,17 +3,27 @@ import { ref, computed, reactive, watch } from 'vue';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
-import { required, helpers, url } from '@vuelidate/validators';
+import {
+  required,
+  helpers,
+  url,
+  integer,
+  between,
+} from '@vuelidate/validators';
 import { useVuelidate } from '@vuelidate/core';
 import { copyTextToClipboard } from 'shared/helpers/clipboard';
 import { useToggle } from '@vueuse/core';
+import AgentBotsAPI from 'dashboard/api/agentBots';
 
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
+import RadioCard from 'dashboard/components-next/radioCard/RadioCard.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import AccessToken from 'dashboard/routes/dashboard/settings/profile/AccessToken.vue';
+import AiAgentTextSetting from './AiAgentTextSetting.vue';
 
 const props = defineProps({
   type: {
@@ -32,31 +42,73 @@ const MODAL_TYPES = {
   EDIT: 'edit',
 };
 
+const BOT_TYPES = {
+  WEBHOOK: 'webhook',
+  AI_AGENT: 'ai_agent',
+};
+
+// Length limits of the AI agent settings, as the backend validates them
+const TEXT_LIMITS = {
+  toneOfVoice: 5000,
+  instructions: 10000,
+  fallbackMessage: 1000,
+};
+
 const store = useStore();
 const { t } = useI18n();
 const dialogRef = ref(null);
 const uiFlags = useMapGetter('agentBots/getUIFlags');
+const teams = useMapGetter('teams/getTeams');
+
+const aiAgentStateFrom = (config = {}) => ({
+  model: config.model || '',
+  reasoningEffort: config.reasoning_effort || '',
+  toneOfVoice: config.tone_of_voice || '',
+  instructions: config.instructions || '',
+  handoffTeamId: config.handoff_team_id ? Number(config.handoff_team_id) : '',
+  maxReplies: config.max_replies_per_conversation ?? '',
+  fallbackMessage: config.fallback_message || '',
+});
 
 const formState = reactive({
   botName: '',
   botDescription: '',
+  botType: BOT_TYPES.WEBHOOK,
   botUrl: '',
   botAvatar: null,
   botAvatarUrl: '',
+  ...aiAgentStateFrom(),
 });
 
 const [showAccessToken, toggleAccessToken] = useToggle();
 const accessToken = ref('');
 const botSecret = ref('');
+const aiAgentDefaults = ref(null);
 
-const v$ = useVuelidate(
-  {
-    botName: {
-      required: helpers.withMessage(
-        () => t('AGENT_BOTS.FORM.ERRORS.NAME'),
-        required
-      ),
-    },
+const isAiAgent = computed(() => formState.botType === BOT_TYPES.AI_AGENT);
+
+const rules = computed(() => {
+  const botName = {
+    required: helpers.withMessage(
+      () => t('AGENT_BOTS.FORM.ERRORS.NAME'),
+      required
+    ),
+  };
+
+  if (isAiAgent.value) {
+    const replyLimitError = () =>
+      t('AGENT_BOTS.FORM.AI_AGENT.REPLY_LIMIT.ERROR');
+    return {
+      botName,
+      maxReplies: {
+        integer: helpers.withMessage(replyLimitError, integer),
+        between: helpers.withMessage(replyLimitError, between(1, 200)),
+      },
+    };
+  }
+
+  return {
+    botName,
     botUrl: {
       required: helpers.withMessage(
         () => t('AGENT_BOTS.FORM.ERRORS.URL'),
@@ -67,9 +119,10 @@ const v$ = useVuelidate(
         url
       ),
     },
-  },
-  formState
-);
+  };
+});
+
+const v$ = useVuelidate(rules, formState);
 
 const isLoading = computed(() =>
   props.type === MODAL_TYPES.CREATE
@@ -105,7 +158,11 @@ const botNameError = computed(() =>
 );
 
 const botUrlError = computed(() =>
-  v$.value.botUrl.$error ? v$.value.botUrl.$errors[0]?.$message : ''
+  v$.value.botUrl?.$error ? v$.value.botUrl.$errors[0]?.$message : ''
+);
+
+const maxRepliesError = computed(() =>
+  v$.value.maxReplies?.$error ? v$.value.maxReplies.$errors[0]?.$message : ''
 );
 
 const showAccessTokenInput = computed(
@@ -115,13 +172,90 @@ const showAccessTokenInput = computed(
     accessToken.value
 );
 
+const botTypeOptions = computed(() => [
+  {
+    value: BOT_TYPES.WEBHOOK,
+    label: t('AGENT_BOTS.TYPES.WEBHOOK'),
+    description: t('AGENT_BOTS.FORM.TYPE.WEBHOOK_DESCRIPTION'),
+  },
+  {
+    value: BOT_TYPES.AI_AGENT,
+    label: t('AGENT_BOTS.TYPES.AI_AGENT'),
+    description: t('AGENT_BOTS.FORM.TYPE.AI_AGENT_DESCRIPTION'),
+  },
+]);
+
+const teamOptions = computed(() => [
+  { value: '', label: t('AGENT_BOTS.FORM.AI_AGENT.HANDOFF_TEAM.NONE') },
+  ...teams.value.map(team => ({ value: team.id, label: team.name })),
+]);
+
+const modelPlaceholder = computed(
+  () =>
+    aiAgentDefaults.value?.model ||
+    t('AGENT_BOTS.FORM.AI_AGENT.MODEL.PLACEHOLDER')
+);
+
+const replyLimitPlaceholder = computed(() =>
+  String(aiAgentDefaults.value?.max_replies_per_conversation ?? '')
+);
+
+const defaultTexts = computed(() => ({
+  toneOfVoice: aiAgentDefaults.value?.tone_of_voice || '',
+  instructions: aiAgentDefaults.value?.instructions || '',
+  fallbackMessage: aiAgentDefaults.value?.fallback_message || '',
+}));
+
+const loadAiAgentOptions = async () => {
+  if (aiAgentDefaults.value) return;
+
+  store.dispatch('teams/get');
+  try {
+    const { data } = await AgentBotsAPI.getAiAgentDefaults();
+    aiAgentDefaults.value = data;
+  } catch (error) {
+    // Without defaults the fields show hints; the next switch to AI agent retries
+  }
+};
+
+// A blank text means "use the default", and so does the default text itself:
+// it is not saved as an override, so a later change of the default applies.
+const textSetting = (value, defaultText) => {
+  const text = value.trim();
+  return text === defaultText.trim() ? '' : text;
+};
+
+// Every setting is sent: a blank one goes as an empty string (null for the team
+// and the reply limit), so clearing a field brings its default back.
+const aiAgentConfig = () => ({
+  model: formState.model.trim(),
+  reasoning_effort: formState.reasoningEffort,
+  tone_of_voice: textSetting(
+    formState.toneOfVoice,
+    defaultTexts.value.toneOfVoice
+  ),
+  instructions: textSetting(
+    formState.instructions,
+    defaultTexts.value.instructions
+  ),
+  handoff_team_id: formState.handoffTeamId || null,
+  max_replies_per_conversation:
+    formState.maxReplies === '' ? null : Number(formState.maxReplies),
+  fallback_message: textSetting(
+    formState.fallbackMessage,
+    defaultTexts.value.fallbackMessage
+  ),
+});
+
 const resetForm = () => {
   Object.assign(formState, {
     botName: '',
     botDescription: '',
+    botType: BOT_TYPES.WEBHOOK,
     botUrl: '',
     botAvatar: null,
     botAvatarUrl: '',
+    ...aiAgentStateFrom(),
   });
   v$.value.$reset();
 };
@@ -158,9 +292,10 @@ const handleSubmit = async () => {
   const botData = {
     name: formState.botName,
     description: formState.botDescription,
-    outgoing_url: formState.botUrl,
-    bot_type: 'webhook',
+    outgoing_url: isAiAgent.value ? '' : formState.botUrl,
+    bot_type: formState.botType,
     avatar: formState.botAvatar,
+    ...(isAiAgent.value && { bot_config: aiAgentConfig() }),
   };
 
   const isCreate = props.type === MODAL_TYPES.CREATE;
@@ -180,8 +315,8 @@ const handleSubmit = async () => {
       : t('AGENT_BOTS.EDIT.API.SUCCESS_MESSAGE');
     useAlert(alertKey);
 
-    // Show access token and secret after creation
-    if (isCreate) {
+    // Show access token and secret after creating a webhook bot
+    if (isCreate && !isAiAgent.value) {
       const {
         access_token: responseAccessToken,
         secret: responseSecret,
@@ -215,6 +350,7 @@ const initializeForm = () => {
     const {
       name,
       description,
+      bot_type: botType,
       outgoing_url: botUrl,
       thumbnail,
       bot_config: botConfig,
@@ -223,8 +359,10 @@ const initializeForm = () => {
     } = props.selectedBot;
     formState.botName = name || '';
     formState.botDescription = description || '';
+    formState.botType = botType || BOT_TYPES.WEBHOOK;
     formState.botUrl = botUrl || botConfig?.webhook_url || '';
     formState.botAvatarUrl = thumbnail || '';
+    Object.assign(formState, aiAgentStateFrom(botConfig || {}));
 
     if (props.type === MODAL_TYPES.EDIT) {
       if (botAccessToken) accessToken.value = botAccessToken;
@@ -285,6 +423,14 @@ const onClickClose = () => {
 
 watch(() => props.selectedBot, initializeForm, { immediate: true, deep: true });
 
+watch(
+  isAiAgent,
+  value => {
+    if (value) loadAiAgentOptions();
+  },
+  { immediate: true }
+);
+
 defineExpose({ dialogRef });
 </script>
 
@@ -292,6 +438,7 @@ defineExpose({ dialogRef });
   <Dialog
     ref="dialogRef"
     type="edit"
+    overflow-y-auto
     :title="dialogTitle"
     :description="dialogDescription"
     :show-cancel-button="false"
@@ -335,7 +482,25 @@ defineExpose({ dialogRef });
           :placeholder="$t('AGENT_BOTS.FORM.DESCRIPTION.PLACEHOLDER')"
         />
 
+        <div class="flex flex-col gap-2">
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t('AGENT_BOTS.FORM.TYPE.LABEL') }}
+          </span>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <RadioCard
+              v-for="option in botTypeOptions"
+              :id="`agent-bot-type-${option.value}`"
+              :key="option.value"
+              :label="option.label"
+              :description="option.description"
+              :is-active="formState.botType === option.value"
+              @select="formState.botType = option.value"
+            />
+          </div>
+        </div>
+
         <Input
+          v-if="!isAiAgent"
           id="bot-url"
           v-model="formState.botUrl"
           :label="$t('AGENT_BOTS.FORM.WEBHOOK_URL.LABEL')"
@@ -344,10 +509,87 @@ defineExpose({ dialogRef });
           :message-type="botUrlError ? 'error' : 'info'"
           @blur="v$.botUrl.$touch()"
         />
+
+        <template v-else>
+          <div class="flex flex-col gap-1">
+            <Input
+              id="bot-model"
+              v-model="formState.model"
+              :label="$t('AGENT_BOTS.FORM.AI_AGENT.MODEL.LABEL')"
+              :placeholder="modelPlaceholder"
+            />
+            <p class="mb-0 text-label-small text-n-slate-11">
+              {{ $t('AGENT_BOTS.FORM.AI_AGENT.MODEL.HELP') }}
+            </p>
+          </div>
+
+          <AiAgentTextSetting
+            id="bot-tone-of-voice"
+            v-model="formState.toneOfVoice"
+            :label="$t('AGENT_BOTS.FORM.AI_AGENT.TONE_OF_VOICE.LABEL')"
+            :help="$t('AGENT_BOTS.FORM.AI_AGENT.DEFAULT_TEXT_HELP')"
+            :default-text="defaultTexts.toneOfVoice"
+            :max-length="TEXT_LIMITS.toneOfVoice"
+            min-height="6rem"
+            max-height="16rem"
+          />
+
+          <AiAgentTextSetting
+            id="bot-instructions"
+            v-model="formState.instructions"
+            :label="$t('AGENT_BOTS.FORM.AI_AGENT.INSTRUCTIONS.LABEL')"
+            :help="$t('AGENT_BOTS.FORM.AI_AGENT.DEFAULT_TEXT_HELP')"
+            :default-text="defaultTexts.instructions"
+            :max-length="TEXT_LIMITS.instructions"
+            min-height="8rem"
+            max-height="20rem"
+          />
+
+          <div class="flex flex-col gap-1">
+            <label class="flex flex-col gap-1">
+              {{ $t('AGENT_BOTS.FORM.AI_AGENT.HANDOFF_TEAM.LABEL') }}
+              <Select
+                v-model="formState.handoffTeamId"
+                :options="teamOptions"
+                class="!w-full font-normal"
+                data-test-id="bot-handoff-team"
+              />
+            </label>
+            <p class="mb-0 text-label-small text-n-slate-11">
+              {{ $t('AGENT_BOTS.FORM.AI_AGENT.HANDOFF_TEAM.HELP') }}
+            </p>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <Input
+              id="bot-reply-limit"
+              v-model="formState.maxReplies"
+              type="number"
+              max="200"
+              :label="$t('AGENT_BOTS.FORM.AI_AGENT.REPLY_LIMIT.LABEL')"
+              :placeholder="replyLimitPlaceholder"
+              :message="maxRepliesError"
+              :message-type="maxRepliesError ? 'error' : 'info'"
+              @blur="v$.maxReplies.$touch()"
+            />
+            <p class="mb-0 text-label-small text-n-slate-11">
+              {{ $t('AGENT_BOTS.FORM.AI_AGENT.REPLY_LIMIT.HELP') }}
+            </p>
+          </div>
+
+          <AiAgentTextSetting
+            id="bot-fallback-message"
+            v-model="formState.fallbackMessage"
+            :label="$t('AGENT_BOTS.FORM.AI_AGENT.FALLBACK_MESSAGE.LABEL')"
+            :help="$t('AGENT_BOTS.FORM.AI_AGENT.FALLBACK_MESSAGE.HELP')"
+            :default-text="defaultTexts.fallbackMessage"
+            :max-length="TEXT_LIMITS.fallbackMessage"
+          />
+        </template>
       </div>
 
       <div
-        v-if="botSecret && type === MODAL_TYPES.EDIT"
+        v-if="botSecret && type === MODAL_TYPES.EDIT && !isAiAgent"
         class="flex flex-col gap-1"
       >
         <label class="mb-0.5 text-sm font-medium text-n-slate-12">
