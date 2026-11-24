@@ -9,7 +9,6 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
 
   before_action -> { authorize @agent_bot, :manage_knowledge? }
   before_action :knowledge_entry, only: [:show, :update, :destroy]
-  before_action :validate_status, only: [:create, :update]
 
   # The status counts follow the search and category filters, not the status filter
   def index
@@ -59,13 +58,6 @@ class Api::V1::Accounts::AgentBots::KnowledgeEntriesController < Api::V1::Accoun
 
   def knowledge_entry
     @knowledge_entry = @agent_bot.knowledge_entries.find(params[:id])
-  end
-
-  # The enum raises on an unknown status, and a blank one would break the not-null column
-  def validate_status
-    return if !params.key?(:status) || AgentBotKnowledgeEntry.statuses.key?(params[:status])
-
-    render_could_not_create_error(I18n.t('agent_bot_knowledge.invalid_status', statuses: AgentBotKnowledgeEntry.statuses.keys.join(', ')))
   end
 
   def searched_entries

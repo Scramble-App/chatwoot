@@ -350,8 +350,9 @@ RSpec.describe 'Agent Bot API', type: :request do
 
       expect(response).to have_http_status(:success)
       expect(response.parsed_body).to eq(
-        'reasoning_effort' => 'low', 'tone_of_voice' => AiAgents::Defaults::TONE_OF_VOICE, 'instructions' => AiAgents::Defaults::INSTRUCTIONS,
-        'max_replies_per_conversation' => 30, 'fallback_message' => AiAgents::Defaults::FALLBACK_MESSAGE, 'model' => 'gpt-test-model'
+        'reasoning_effort' => AiAgents::Settings::DEFAULT_REASONING_EFFORT, 'tone_of_voice' => AiAgents::Defaults::TONE_OF_VOICE,
+        'instructions' => AiAgents::Defaults::INSTRUCTIONS, 'max_replies_per_conversation' => 30,
+        'fallback_message' => AiAgents::Defaults::FALLBACK_MESSAGE, 'model' => 'gpt-test-model'
       )
     end
 
@@ -359,7 +360,7 @@ RSpec.describe 'Agent Bot API', type: :request do
       get url, headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
-      expect(response.parsed_body).to include('model' => nil, 'reasoning_effort' => 'low')
+      expect(response.parsed_body).to include('model' => nil, 'reasoning_effort' => AiAgents::Settings::DEFAULT_REASONING_EFFORT)
     end
 
     it 'rejects an agent' do

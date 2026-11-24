@@ -531,7 +531,6 @@ en:
       Transcript:
       %{format_messages}
   agent_bot_knowledge:
-    invalid_status: 'Status must be one of: %{statuses}'
     import:
       file_missing: 'Choose a CSV file to import'
       file_too_large: 'The file is larger than %{size} MB'

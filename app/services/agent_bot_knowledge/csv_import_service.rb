@@ -9,7 +9,6 @@ class AgentBotKnowledge::CsvImportService
   MAX_ROWS = 5_000
   COLUMN_SEPARATORS = [',', ';'].freeze
   KB_KEY = /\AKB-(\d+)\z/
-  STATUSES = AgentBotKnowledgeEntry.statuses.keys.freeze
   # The export quotes a cell that starts with a formula character (CSVSafe), so the import removes that quote again
   EXPORT_QUOTE = /\A'(?=[-=+@%|\r\t])/
 
@@ -18,14 +17,22 @@ class AgentBotKnowledge::CsvImportService
   # => { created:, updated:, errors: [{ row:, message: }] }, with the row numbers of the sheet (the header is row 1)
   def perform
     rows = parse_rows
-    prepare_keys(rows)
-    entries, errors = build_entries(rows)
-    result = { created: entries.count(&:new_record?), updated: entries.count { |entry| entry.persisted? && entry.changed? }, errors: errors }
-    save(entries) unless dry_run || errors.any?
-    result
+    return build_result(rows) if dry_run
+
+    # The lock keeps other entries of the bot from taking the new keys until the import is saved
+    ActiveRecord::Base.transaction do
+      AgentBotKnowledgeEntry.lock_keys!(agent_bot.id)
+      build_result(rows).tap { |result| save if result[:errors].empty? }
+    end
   end
 
   private
+
+  def build_result(rows)
+    prepare_keys(rows)
+    @entries, errors = build_entries(rows)
+    { created: @entries.count(&:new_record?), updated: @entries.count { |entry| entry.persisted? && entry.changed? }, errors: errors }
+  end
 
   def parse_rows
     content = read_content
@@ -84,7 +91,7 @@ class AgentBotKnowledge::CsvImportService
     @existing_entries = agent_bot.knowledge_entries.where(key: keys).index_by(&:key)
     @rows_by_key = {}
     file_numbers = keys.filter_map { |key| key[KB_KEY, 1]&.to_i }
-    @last_key_number = [agent_bot.knowledge_entries.maximum(Arel.sql(AgentBotKnowledgeEntry::KEY_NUMBER_SQL)).to_i, *file_numbers].max
+    @last_key_number = [AgentBotKnowledgeEntry.next_key_number(agent_bot.id) - 1, *file_numbers].max
   end
 
   def build_entries(rows)
@@ -105,31 +112,24 @@ class AgentBotKnowledge::CsvImportService
     @rows_by_key[key] = row_number if key
     entry = @existing_entries[key] || agent_bot.knowledge_entries.new(key: key || next_key)
     entry.assign_attributes(attributes.except(:key, :status))
-    messages = assign_status(entry, attributes[:status]&.downcase)
-    messages += entry.errors.full_messages unless entry.valid?
-    [entry, messages]
+    assign_status(entry, attributes[:status]&.downcase)
+    [entry, entry.valid? ? [] : entry.errors.full_messages]
   end
 
   def next_key
-    @last_key_number += 1
-    format('KB-%03d', @last_key_number)
+    format(AgentBotKnowledgeEntry::KEY_FORMAT, @last_key_number += 1)
   end
 
-  # => error messages
+  # An unknown status is a validation error of the entry
   def assign_status(entry, status)
     if status
-      return [I18n.t('agent_bot_knowledge.invalid_status', statuses: STATUSES.join(', '))] unless STATUSES.include?(status)
-
       entry.status = status
     elsif entry.new_record?
       entry.status = [entry.answer, entry.short_answer].any?(&:present?) ? :published : :needs_answer
     end
-    []
   end
 
-  def save(entries)
-    ActiveRecord::Base.transaction do
-      entries.each { |entry| entry.save! if entry.changed? }
-    end
+  def save
+    @entries.each { |entry| entry.save! if entry.changed? }
   end
 end

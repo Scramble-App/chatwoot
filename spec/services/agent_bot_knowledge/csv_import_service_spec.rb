@@ -63,7 +63,7 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
     it 'skips blank rows and counts the rows of the sheet' do
       result = import("Вопрос,Статус\n,\n\nNew?,archived\n")
 
-      expect(result[:errors]).to eq([{ row: 4, message: 'Status must be one of: draft, published, needs_answer' }])
+      expect(result[:errors]).to eq([{ row: 4, message: 'Status is not included in the list' }])
     end
   end
 
@@ -140,13 +140,34 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect(result).to eq(created: 2, updated: 1, errors: [])
       expect(entries.pluck(:key, :question)).to eq([['KB-001', 'Old question?']])
     end
+
+    it 'does not take the key lock' do
+      allow(AgentBotKnowledgeEntry).to receive(:lock_keys!).and_call_original
+
+      import("Вопрос\nNew?\n", dry_run: true)
+
+      expect(AgentBotKnowledgeEntry).not_to have_received(:lock_keys!)
+    end
+  end
+
+  describe 'key lock' do
+    it 'locks the keys of the bot before it numbers the new entries' do
+      allow(AgentBotKnowledgeEntry).to receive(:lock_keys!).and_call_original
+      allow(AgentBotKnowledgeEntry).to receive(:next_key_number).and_call_original
+
+      import("Вопрос\nFirst?\nSecond?\n")
+
+      expect(AgentBotKnowledgeEntry).to have_received(:lock_keys!).with(agent_bot.id).once.ordered
+      expect(AgentBotKnowledgeEntry).to have_received(:next_key_number).with(agent_bot.id).once.ordered
+      expect(entries.pluck(:key)).to eq(%w[KB-001 KB-002])
+    end
   end
 
   describe 'invalid rows' do
     it 'saves nothing and returns every row error with its sheet row' do
       create(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'KB-001', question: 'Old question?')
       csv = "ID,Вопрос,Короткий ответ,Статус\nKB-001,New question?,,\n,,,\nKB-002,,,\nKB-003,Published?,,published\n" \
-            "KB-001,Again?,,\nKB-004,#{'a' * 2_001},,\nKB-005,Fine?,,\n"
+            "KB-001,Again?,,\nKB-004,#{'a' * 2_001},,\nKB 6,Spaced key?,,\nKB-005,Fine?,,\nKB-007,Archived?,,archived\n"
 
       result = import(csv)
 
@@ -155,7 +176,9 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
           { row: 4, message: "Question can't be blank" },
           { row: 5, message: 'Answer or short answer is required to publish the entry' },
           { row: 6, message: 'The key KB-001 is already in row 2' },
-          { row: 7, message: 'Question is too long (maximum is 2000 characters)' }
+          { row: 7, message: 'Question is too long (maximum is 2000 characters)' },
+          { row: 8, message: 'Key is invalid' },
+          { row: 10, message: 'Status is not included in the list' }
         ]
       )
       expect(result.slice(:created, :updated)).to eq(created: 1, updated: 1)

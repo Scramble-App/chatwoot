@@ -232,6 +232,7 @@ RSpec.describe 'Agent bot knowledge entries API', type: :request do
         end.not_to change(AgentBotKnowledgeEntry, :count)
 
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body).to eq('message' => 'Status is not included in the list', 'attributes' => ['status'])
       end
     end
 
