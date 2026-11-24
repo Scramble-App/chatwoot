@@ -114,8 +114,13 @@ RSpec.describe AgentBotKnowledgeEntry do
       expect(create_entry(key: 'kb-052').key).to eq('kb-052')
     end
 
+    it 'trims non-breaking and other Unicode spaces around a given key' do
+      expect(create_entry(key: "\u00A0KB-056\u00A0").key).to eq('KB-056')
+      expect(create_entry(key: "KB-057\u3000").key).to eq('KB-057')
+    end
+
     it 'rejects whitespace inside a key' do
-      ['KB 053', "KB-\n054", "KB-\t055"].each do |key|
+      ['KB 053', "KB-\n054", "KB-\t055", "KB\u00A0058"].each do |key|
         entry = build(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: key)
 
         expect(entry).not_to be_valid, "expected #{key.inspect} to be rejected"
