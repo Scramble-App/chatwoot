@@ -10,7 +10,6 @@ class AgentBotKnowledge::CsvImportService
   # Blank rows are skipped, but they count here, so a file of them stops early too
   MAX_LINES = 2 * MAX_ROWS
   MAX_HEADER_SIZE = 8.kilobytes
-  MAX_HEADER_COLUMNS = 100
   COLUMN_SEPARATORS = [',', ';'].freeze
   KB_KEY = /\AKB-(\d+)\z/
   # The export quotes a cell that starts with a formula character (CSVSafe), so the import removes that quote again
@@ -28,8 +27,9 @@ class AgentBotKnowledge::CsvImportService
       AgentBotKnowledgeEntry.lock_keys!(agent_bot.id)
       build_result(rows).tap { |result| save if result[:errors].empty? }
     end
-  rescue ActiveRecord::RecordNotUnique
+  rescue ActiveRecord::RecordNotUnique => e
     # An entry with a key of the file was saved meanwhile; the transaction rolled the import back
+    Rails.logger.warn("AgentBotKnowledge::CsvImportService rolled back for bot #{agent_bot.id}: #{e.message}")
     raise Error, I18n.t('agent_bot_knowledge.import.changed_meanwhile')
   end
 
@@ -41,10 +41,12 @@ class AgentBotKnowledge::CsvImportService
     { created: @entries.count(&:new_record?), updated: @entries.count { |entry| entry.persisted? && entry.changed? }, errors: errors }
   end
 
-  # The header must be one complete line, so reading it is bounded by MAX_HEADER_SIZE
+  # The header is the text up to the first CR or LF, as CR-only files end their lines with CR. It must be a complete
+  # row, so reading it is bounded by MAX_HEADER_SIZE, and csv.shift then skips exactly that row.
+  # index finds the line end without the backtracking memory an anchored regex takes on a long line.
   def parse_rows
     content = read_content
-    header_line = content.each_line.first.to_s
+    header_line = content[0, content.index(/[\r\n]/) || content.length]
     separator = column_separator(header_line)
     columns = columns_for(CSV.parse_line(header_line, col_sep: separator))
     csv = CSV.new(content, col_sep: separator)
@@ -72,7 +74,7 @@ class AgentBotKnowledge::CsvImportService
   end
 
   def header_too_long
-    Error.new(I18n.t('agent_bot_knowledge.import.header_too_long', size: MAX_HEADER_SIZE / 1.kilobyte, count: MAX_HEADER_COLUMNS))
+    Error.new(I18n.t('agent_bot_knowledge.import.header_too_long', size: MAX_HEADER_SIZE / 1.kilobyte))
   end
 
   # The UTF-8 text of the file without a BOM
@@ -87,13 +89,12 @@ class AgentBotKnowledge::CsvImportService
   end
 
   # Excel with a Russian locale saves semicolons; the separator that finds more known headers wins, a comma on a tie.
-  # A split into too many columns finds none, so a wide header is never mapped.
+  # The size limit keeps the header to a few thousand cells, each one hash lookup.
   def column_separator(header_line)
     raise header_too_long if header_line.bytesize > MAX_HEADER_SIZE
 
     COLUMN_SEPARATORS.max_by do |separator|
-      names = CSV.parse_line(header_line, col_sep: separator).to_a
-      names.size > MAX_HEADER_COLUMNS ? 0 : names.count { |name| AgentBotKnowledge::CsvColumns.attribute_for(name) }
+      CSV.parse_line(header_line, col_sep: separator).to_a.count { |name| AgentBotKnowledge::CsvColumns.attribute_for(name) }
     rescue CSV::MalformedCSVError
       0
     end
@@ -101,8 +102,6 @@ class AgentBotKnowledge::CsvImportService
 
   # Attribute => position of its first column; other columns are ignored
   def columns_for(header)
-    raise header_too_long if header.to_a.size > MAX_HEADER_COLUMNS
-
     columns = {}
     Array(header).each_with_index do |name, position|
       attribute = AgentBotKnowledge::CsvColumns.attribute_for(name)

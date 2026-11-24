@@ -537,7 +537,7 @@ en:
       invalid_encoding: 'The file must be a CSV file in UTF-8'
       invalid_csv: 'The file is not a valid CSV file: %{error}'
       no_columns: 'The file has none of the knowledge base columns: %{headers}'
-      header_too_long: 'The header row of the file is too long: keep it under %{size} KB and %{count} columns'
+      header_too_long: 'The header row of the file is too long: keep it under %{size} KB'
       too_many_rows: 'The file has more than %{count} rows'
       duplicate_key: 'The key %{key} is already in row %{row}'
       changed_meanwhile: 'The knowledge base changed during the import, so nothing was imported. Import the file again.'

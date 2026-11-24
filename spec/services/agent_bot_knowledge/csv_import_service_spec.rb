@@ -55,6 +55,23 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
       expect(entries.pluck(:key, :question)).to eq([['KB-007', 'Fees; terms?']])
     end
 
+    it 'reads a file that ends its lines with CR only, longer than the header limit' do
+      rows = (1..9).map { |number| "KB-00#{number},Question #{number}? #{'a' * 1_000}" }
+      csv = "ID,Вопрос\r#{rows.join("\r")}\r"
+
+      expect(csv.bytesize).to be > 8.kilobytes
+      expect(import(csv, dry_run: true)).to eq(created: 9, updated: 0, errors: [])
+    end
+
+    it 'reads a sheet with empty columns after the named ones, with either separator' do
+      [',', ';'].each do |separator|
+        csv = CSV.generate_line([*AgentBotKnowledge::CsvColumns::HEADERS.values, *Array.new(92)], col_sep: separator) +
+              CSV.generate_line(['KB-001', nil, nil, 'Are there fees?', nil, 'No.', nil, nil, 'draft', *Array.new(92)], col_sep: separator)
+
+        expect(import(csv, dry_run: true)).to eq(created: 1, updated: 0, errors: [])
+      end
+    end
+
     it 'rejects a file without any column of the sheet' do
       expect { import("Name,Email\nJane,jane@example.com\n") }
         .to raise_error(described_class::Error, /none of the knowledge base columns: ID, Категория/)
@@ -185,10 +202,12 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
         original.call(*args, **options)
       end
       # rubocop:enable RSpec/AnyInstance
+      allow(Rails.logger).to receive(:warn)
 
       expect { import("ID,Вопрос\nPRICING-1,First?\nPRICING-2,Second?\n") }
         .to raise_error(described_class::Error, 'The knowledge base changed during the import, so nothing was imported. Import the file again.')
       expect(entries).to be_empty
+      expect(Rails.logger).to have_received(:warn).with(/CsvImportService rolled back for bot #{agent_bot.id}: ActiveRecord::RecordNotUnique/)
     end
   end
 
@@ -271,13 +290,10 @@ RSpec.describe AgentBotKnowledge::CsvImportService do
 
     it 'rejects a very wide header before it reads the column names' do
       allow(AgentBotKnowledge::CsvColumns).to receive(:attribute_for).and_call_original
-      message = 'The header row of the file is too long: keep it under 8 KB and 100 columns'
 
-      expect { import("Вопрос#{',a' * 2_500_000}\nNew?\n") }.to raise_error(described_class::Error, message)
+      expect { import("Вопрос#{',a' * 2_500_000}\nNew?\n") }
+        .to raise_error(described_class::Error, 'The header row of the file is too long: keep it under 8 KB')
       expect(AgentBotKnowledge::CsvColumns).not_to have_received(:attribute_for)
-
-      expect { import("Вопрос#{',a' * 100}\nNew?\n") }.to raise_error(described_class::Error, message)
-      expect(AgentBotKnowledge::CsvColumns).to have_received(:attribute_for).once
     end
 
     it 'rejects a file that is not UTF-8' do
