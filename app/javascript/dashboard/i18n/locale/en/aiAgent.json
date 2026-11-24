@@ -107,10 +107,11 @@
         "UPDATED": "Updated entries",
         "ERRORS_TITLE": "{count} row needs fixing. Fix the file and choose it again. | {count} rows need fixing. Fix the file and choose it again.",
         "ROW_ERROR": "Row {row}: {message}",
-        "NOTHING_TO_IMPORT": "The file has no entries to import.",
+        "NO_CHANGES": "Nothing to import: the file has no new or changed entries.",
         "CONFIRM": "Import",
         "SUCCESS": "Import finished: {created} added, {updated} updated",
-        "ERROR": "Could not check the file. Please try again."
+        "CHECK_ERROR": "Could not check the file. Please try again.",
+        "APPLY_ERROR": "Could not import the file. Please try again."
       },
       "EXPORT_ERROR": "Could not export the knowledge base. Please try again."
     }

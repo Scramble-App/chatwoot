@@ -83,6 +83,19 @@ const fill = async (wrapper, values) => {
 
 const confirmButton = wrapper => wrapper.find('.dialog-confirm');
 
+const closeDialog = wrapper =>
+  wrapper.findComponent({ name: 'Dialog' }).vm.close();
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 describe('KnowledgeEntryDialog', () => {
   it('creates an entry with trimmed fields and one phrasing per line', async () => {
     AiAgentKnowledgeAPI.createEntry.mockResolvedValue({ data: { id: 5 } });
@@ -248,5 +261,104 @@ describe('KnowledgeEntryDialog', () => {
     expect(wrapper.find('.dialog-title').text()).toBe('New entry');
     expect(wrapper.find('#ai-agent-entry-question').element.value).toBe('');
     expect(wrapper.find('select').element.value).toBe('draft');
+  });
+
+  it('keeps saving to the bot it was opened for', async () => {
+    AiAgentKnowledgeAPI.showEntry.mockResolvedValue({
+      data: { ...needsAnswerEntry, questions: [] },
+    });
+    AiAgentKnowledgeAPI.updateEntry.mockResolvedValue({ data: {} });
+    const wrapper = await mountDialog();
+
+    wrapper.vm.open(needsAnswerEntry);
+    await flushPromises();
+    await wrapper.setProps({ botId: 9 });
+    await confirmButton(wrapper).trigger('click');
+    await flushPromises();
+
+    expect(AiAgentKnowledgeAPI.showEntry).toHaveBeenCalledWith(7, 2);
+    expect(AiAgentKnowledgeAPI.updateEntry).toHaveBeenCalledWith(
+      7,
+      2,
+      expect.objectContaining({ key: 'KB-002' })
+    );
+  });
+
+  it('keeps a reopened dialog open when an earlier save ends', async () => {
+    const pendingSave = deferred();
+    AiAgentKnowledgeAPI.createEntry.mockReturnValue(pendingSave.promise);
+    AiAgentKnowledgeAPI.showEntry.mockResolvedValue({
+      data: { ...needsAnswerEntry, questions: [] },
+    });
+    const wrapper = await mountDialog();
+
+    wrapper.vm.open();
+    await flushPromises();
+    await fill(wrapper, { question: 'What are the fees?' });
+    await confirmButton(wrapper).trigger('click');
+    closeDialog(wrapper);
+    wrapper.vm.open(needsAnswerEntry);
+    await flushPromises();
+    pendingSave.resolve({ data: { id: 5 } });
+    await flushPromises();
+
+    // The first entry was saved, so the list still refreshes
+    expect(useAlert).toHaveBeenCalledWith('Entry added');
+    expect(wrapper.emitted('saved')).toHaveLength(1);
+    expect(wrapper.find('.dialog-title').text()).toBe('Edit KB-002');
+    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined();
+  });
+
+  it('keeps the errors of an earlier save out of a reopened dialog', async () => {
+    const pendingSave = deferred();
+    AiAgentKnowledgeAPI.createEntry.mockReturnValue(pendingSave.promise);
+    const wrapper = await mountDialog();
+
+    wrapper.vm.open();
+    await flushPromises();
+    await fill(wrapper, { question: 'What are the fees?' });
+    await confirmButton(wrapper).trigger('click');
+    closeDialog(wrapper);
+    wrapper.vm.open();
+    await flushPromises();
+    pendingSave.reject({
+      response: {
+        status: 422,
+        data: { message: 'Key has already been taken', attributes: ['key'] },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.findAllComponents(Input)[0].props('messageType')).toBe(
+      'info'
+    );
+  });
+
+  it('drops customer wordings that arrive after the dialog was reopened', async () => {
+    const pendingShow = deferred();
+    AiAgentKnowledgeAPI.showEntry.mockReturnValue(pendingShow.promise);
+    const wrapper = await mountDialog();
+
+    wrapper.vm.open(needsAnswerEntry);
+    closeDialog(wrapper);
+    wrapper.vm.open();
+    await flushPromises();
+    pendingShow.resolve({
+      data: {
+        ...needsAnswerEntry,
+        questions: [
+          {
+            id: 31,
+            content: 'Can a Swiss brand apply?',
+            conversation_id: 321,
+            created_at: 1700000000,
+          },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('Latest customer wordings');
   });
 });

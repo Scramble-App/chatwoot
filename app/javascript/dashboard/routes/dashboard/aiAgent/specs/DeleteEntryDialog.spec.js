@@ -60,4 +60,39 @@ describe('DeleteEntryDialog', () => {
     );
     expect(wrapper.emitted('deleted')).toBeUndefined();
   });
+
+  it('deletes from the bot it was opened for', async () => {
+    AiAgentKnowledgeAPI.deleteEntry.mockResolvedValue({});
+    const wrapper = await mountDialog();
+
+    await wrapper.setProps({ botId: 9 });
+    await wrapper.find('.dialog-confirm').trigger('click');
+    await flushPromises();
+
+    expect(AiAgentKnowledgeAPI.deleteEntry).toHaveBeenCalledWith(7, 12);
+  });
+
+  it('keeps a reopened dialog open when an earlier delete ends', async () => {
+    let finishDelete;
+    AiAgentKnowledgeAPI.deleteEntry.mockReturnValue(
+      new Promise(resolve => {
+        finishDelete = resolve;
+      })
+    );
+    const wrapper = await mountDialog();
+
+    await wrapper.find('.dialog-confirm').trigger('click');
+    wrapper.findComponent({ name: 'Dialog' }).vm.close();
+    wrapper.vm.open({ id: 13, key: 'KB-013' });
+    await flushPromises();
+    finishDelete({});
+    await flushPromises();
+
+    expect(useAlert).toHaveBeenCalledWith('Entry deleted');
+    expect(wrapper.emitted('deleted')).toHaveLength(1);
+    expect(wrapper.find('.dialog-title').text()).toBe('Delete KB-013?');
+    expect(
+      wrapper.find('.dialog-confirm').attributes('disabled')
+    ).toBeUndefined();
+  });
 });

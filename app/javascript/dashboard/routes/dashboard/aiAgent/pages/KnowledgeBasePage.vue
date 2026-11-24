@@ -106,7 +106,7 @@ const onCategoryChange = value =>
 const onPageChange = value => updateQuery({ page: value > 1 ? value : '' });
 
 const switchBot = id => {
-  router.push({
+  router.replace({
     name: 'ai_agent_knowledge',
     params: { accountId: route.params.accountId, botId: id },
   });
@@ -222,18 +222,22 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
         @update:current-page="onPageChange"
       />
     </footer>
+    <!-- Keyed by bot, so a bot change (switcher or browser back) closes them -->
     <KnowledgeEntryDialog
+      :key="`entry-${botId}`"
       ref="entryDialogRef"
       :bot-id="botId"
       :categories="meta.categories"
       @saved="fetchEntries"
     />
     <DeleteEntryDialog
+      :key="`delete-${botId}`"
       ref="deleteDialogRef"
       :bot-id="botId"
       @deleted="fetchEntries"
     />
     <KnowledgeImportDialog
+      :key="`import-${botId}`"
       ref="importDialogRef"
       :bot-id="botId"
       @imported="fetchEntries"

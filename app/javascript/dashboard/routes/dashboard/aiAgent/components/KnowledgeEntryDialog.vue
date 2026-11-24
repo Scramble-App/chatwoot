@@ -1,8 +1,8 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { useMapGetter, useStore } from 'dashboard/composables/store';
+import { useStore } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { dynamicTime } from 'shared/helpers/timeHelper';
 import { useStatusOptions } from '../useStatusOptions';
@@ -52,7 +52,6 @@ const buildPayload = form => ({
 const { t } = useI18n();
 const route = useRoute();
 const store = useStore();
-const uiFlags = useMapGetter('aiAgentKnowledge/getUIFlags');
 const { statusOptions } = useStatusOptions();
 
 const dialogRef = ref(null);
@@ -61,6 +60,13 @@ const form = reactive(buildForm());
 const questions = ref([]);
 const errorMessage = ref('');
 const errorAttributes = ref([]);
+const isSaving = ref(false);
+
+// Every open() starts a session and keeps the bot it was opened for, so a
+// late response never changes a reopened dialog and a save never goes to
+// another bot
+let session = 0;
+let openedBotId = null;
 
 const isEditing = computed(() => !!entry.value);
 
@@ -89,56 +95,73 @@ const conversationRoute = conversationId => ({
 });
 
 const loadQuestions = async id => {
+  const loadSession = session;
   try {
     const data = await store.dispatch('aiAgentKnowledge/showEntry', {
-      botId: props.botId,
+      botId: openedBotId,
       id,
     });
-    if (entry.value?.id === id) questions.value = data.questions || [];
+    if (loadSession === session) questions.value = data.questions || [];
   } catch (error) {
     // The wordings are extra context, the entry can be edited without them
   }
 };
 
 const open = (selected = null) => {
+  session += 1;
+  openedBotId = props.botId;
   entry.value = selected;
   Object.assign(form, buildForm(selected || {}));
   questions.value = [];
   errorMessage.value = '';
   errorAttributes.value = [];
+  isSaving.value = false;
   dialogRef.value.open();
   if (selected) loadQuestions(selected.id);
 };
 
 const save = async () => {
+  const saveSession = session;
+  const isUpdate = isEditing.value;
   errorMessage.value = '';
   errorAttributes.value = [];
-  const payload = buildPayload(form);
+  isSaving.value = true;
 
   try {
-    if (isEditing.value) {
+    if (isUpdate) {
       await store.dispatch('aiAgentKnowledge/updateEntry', {
-        botId: props.botId,
+        botId: openedBotId,
         id: entry.value.id,
-        ...payload,
+        ...buildPayload(form),
       });
-      useAlert(t('AI_AGENT.KNOWLEDGE.FORM.UPDATE_SUCCESS'));
     } else {
       await store.dispatch('aiAgentKnowledge/createEntry', {
-        botId: props.botId,
-        ...payload,
+        botId: openedBotId,
+        ...buildPayload(form),
       });
-      useAlert(t('AI_AGENT.KNOWLEDGE.FORM.CREATE_SUCCESS'));
     }
+    // The entry is saved even if the dialog was closed meanwhile
+    useAlert(
+      isUpdate
+        ? t('AI_AGENT.KNOWLEDGE.FORM.UPDATE_SUCCESS')
+        : t('AI_AGENT.KNOWLEDGE.FORM.CREATE_SUCCESS')
+    );
     emit('saved');
-    dialogRef.value.close();
+    if (saveSession === session) dialogRef.value.close();
   } catch (error) {
+    if (saveSession !== session) return;
     const { message, error: apiError, attributes } = error.response?.data || {};
     errorMessage.value =
       message || apiError || t('AI_AGENT.KNOWLEDGE.FORM.SAVE_ERROR');
     errorAttributes.value = attributes || [];
+  } finally {
+    if (saveSession === session) isSaving.value = false;
   }
 };
+
+onBeforeUnmount(() => {
+  session += 1;
+});
 
 defineExpose({ open });
 </script>
@@ -151,7 +174,7 @@ defineExpose({ open });
     position="top"
     overflow-y-auto
     :confirm-button-label="t('AI_AGENT.KNOWLEDGE.FORM.SAVE')"
-    :is-loading="uiFlags.isSaving"
+    :is-loading="isSaving"
     :disable-confirm-button="!form.question.trim()"
     @confirm="save"
   >

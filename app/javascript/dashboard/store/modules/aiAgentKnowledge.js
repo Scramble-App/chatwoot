@@ -22,12 +22,7 @@ export const initialState = () => ({
   records: [],
   meta: initialMeta(),
   uiFlags: {
-    isFetchingKnowledgeBases: false,
-    hasFetchedKnowledgeBases: false,
     isFetching: false,
-    isSaving: false,
-    isDeleting: false,
-    isImporting: false,
     isExporting: false,
   },
 });
@@ -45,17 +40,11 @@ export const getters = {
 
 export const actions = {
   async fetchKnowledgeBases({ commit }) {
-    commit(types.SET_UI_FLAG, { isFetchingKnowledgeBases: true });
     try {
       const { data } = await AiAgentKnowledgeAPI.getKnowledgeBases();
       commit(types.SET_KNOWLEDGE_BASES, data);
     } catch (error) {
       // Without the list the sidebar entry and the bot switcher stay hidden
-    } finally {
-      commit(types.SET_UI_FLAG, {
-        isFetchingKnowledgeBases: false,
-        hasFetchedKnowledgeBases: true,
-      });
     }
   },
 
@@ -80,51 +69,33 @@ export const actions = {
     }
   },
 
+  // The dialogs keep their own loading state, so a request of a closed dialog
+  // never shows as loading in the next one
   async showEntry(_, { botId, id }) {
     const { data } = await AiAgentKnowledgeAPI.showEntry(botId, id);
     return data;
   },
 
-  async createEntry({ commit }, { botId, ...entry }) {
-    commit(types.SET_UI_FLAG, { isSaving: true });
-    try {
-      const { data } = await AiAgentKnowledgeAPI.createEntry(botId, entry);
-      return data;
-    } finally {
-      commit(types.SET_UI_FLAG, { isSaving: false });
-    }
+  async createEntry(_, { botId, ...entry }) {
+    const { data } = await AiAgentKnowledgeAPI.createEntry(botId, entry);
+    return data;
   },
 
-  async updateEntry({ commit }, { botId, id, ...entry }) {
-    commit(types.SET_UI_FLAG, { isSaving: true });
-    try {
-      const { data } = await AiAgentKnowledgeAPI.updateEntry(botId, id, entry);
-      return data;
-    } finally {
-      commit(types.SET_UI_FLAG, { isSaving: false });
-    }
+  async updateEntry(_, { botId, id, ...entry }) {
+    const { data } = await AiAgentKnowledgeAPI.updateEntry(botId, id, entry);
+    return data;
   },
 
-  async deleteEntry({ commit }, { botId, id }) {
-    commit(types.SET_UI_FLAG, { isDeleting: true });
-    try {
-      await AiAgentKnowledgeAPI.deleteEntry(botId, id);
-    } finally {
-      commit(types.SET_UI_FLAG, { isDeleting: false });
-    }
+  async deleteEntry(_, { botId, id }) {
+    await AiAgentKnowledgeAPI.deleteEntry(botId, id);
   },
 
-  async importEntries({ commit }, { botId, file, dryRun }) {
-    commit(types.SET_UI_FLAG, { isImporting: true });
-    try {
-      const { data } = await AiAgentKnowledgeAPI.importEntries(botId, {
-        file,
-        dryRun,
-      });
-      return data;
-    } finally {
-      commit(types.SET_UI_FLAG, { isImporting: false });
-    }
+  async importEntries(_, { botId, file, dryRun }) {
+    const { data } = await AiAgentKnowledgeAPI.importEntries(botId, {
+      file,
+      dryRun,
+    });
+    return data;
   },
 
   async exportEntries({ commit }, { botId }) {

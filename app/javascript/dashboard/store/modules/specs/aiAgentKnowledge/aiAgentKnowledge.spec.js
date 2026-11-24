@@ -70,10 +70,9 @@ describe('#aiAgentKnowledge getters', () => {
 describe('#aiAgentKnowledge mutations', () => {
   it('merges ui flags', () => {
     const state = initialState();
-    mutations[types.SET_UI_FLAG](state, { isSaving: true });
+    mutations[types.SET_UI_FLAG](state, { isExporting: true });
 
-    expect(state.uiFlags.isSaving).toBe(true);
-    expect(state.uiFlags.isFetching).toBe(false);
+    expect(state.uiFlags).toEqual({ isFetching: false, isExporting: true });
   });
 
   it('stores the knowledge bases and entries', () => {
@@ -139,16 +138,11 @@ describe('#aiAgentKnowledge actions', () => {
       await actions.fetchKnowledgeBases({ commit });
 
       expect(commit.mock.calls).toEqual([
-        [types.SET_UI_FLAG, { isFetchingKnowledgeBases: true }],
         [types.SET_KNOWLEDGE_BASES, knowledgeBases],
-        [
-          types.SET_UI_FLAG,
-          { isFetchingKnowledgeBases: false, hasFetchedKnowledgeBases: true },
-        ],
       ]);
     });
 
-    it('swallows errors and marks the list as fetched', async () => {
+    it('swallows errors and keeps the list', async () => {
       AiAgentKnowledgeAPI.getKnowledgeBases.mockRejectedValue(
         new Error('Network Error')
       );
@@ -157,14 +151,7 @@ describe('#aiAgentKnowledge actions', () => {
         actions.fetchKnowledgeBases({ commit })
       ).resolves.toBeUndefined();
 
-      expect(commit).not.toHaveBeenCalledWith(
-        types.SET_KNOWLEDGE_BASES,
-        expect.anything()
-      );
-      expect(commit).toHaveBeenLastCalledWith(types.SET_UI_FLAG, {
-        isFetchingKnowledgeBases: false,
-        hasFetchedKnowledgeBases: true,
-      });
+      expect(commit).not.toHaveBeenCalled();
     });
   });
 
@@ -266,10 +253,7 @@ describe('#aiAgentKnowledge actions', () => {
       question: entry.question,
       status: 'draft',
     });
-    expect(commit.mock.calls).toEqual([
-      [types.SET_UI_FLAG, { isSaving: true }],
-      [types.SET_UI_FLAG, { isSaving: false }],
-    ]);
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('#updateEntry patches the entry and rethrows validation errors', async () => {
@@ -288,9 +272,6 @@ describe('#aiAgentKnowledge actions', () => {
     expect(AiAgentKnowledgeAPI.updateEntry).toHaveBeenCalledWith(7, 12, {
       key: 'KB-001',
     });
-    expect(commit).toHaveBeenLastCalledWith(types.SET_UI_FLAG, {
-      isSaving: false,
-    });
   });
 
   it('#deleteEntry deletes the entry', async () => {
@@ -299,10 +280,7 @@ describe('#aiAgentKnowledge actions', () => {
     await actions.deleteEntry({ commit }, { botId: 7, id: 12 });
 
     expect(AiAgentKnowledgeAPI.deleteEntry).toHaveBeenCalledWith(7, 12);
-    expect(commit.mock.calls).toEqual([
-      [types.SET_UI_FLAG, { isDeleting: true }],
-      [types.SET_UI_FLAG, { isDeleting: false }],
-    ]);
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('#importEntries sends the file and returns the result', async () => {
@@ -318,10 +296,7 @@ describe('#aiAgentKnowledge actions', () => {
       file,
       dryRun: true,
     });
-    expect(commit.mock.calls).toEqual([
-      [types.SET_UI_FLAG, { isImporting: true }],
-      [types.SET_UI_FLAG, { isImporting: false }],
-    ]);
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('#exportEntries downloads the CSV named after the bot', async () => {

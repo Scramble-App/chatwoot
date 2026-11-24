@@ -43,6 +43,17 @@ const chooseFile = async wrapper => {
 
 const confirmButton = wrapper => wrapper.find('.dialog-confirm');
 
+const chooseButton = wrapper =>
+  wrapper.findAll('button').find(button => button.text().startsWith('Choose'));
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise(res => {
+    resolve = res;
+  });
+  return { promise, resolve };
+};
+
 describe('KnowledgeImportDialog', () => {
   it('opens the file picker from the button', async () => {
     const wrapper = await mountDialog();
@@ -152,7 +163,7 @@ describe('KnowledgeImportDialog', () => {
     expect(confirmButton(wrapper).attributes('disabled')).toBeDefined();
   });
 
-  it('says when the file has nothing to import', async () => {
+  it('says when the file has no new or changed entries', async () => {
     AiAgentKnowledgeAPI.importEntries.mockResolvedValue({
       data: { created: 0, updated: 0, errors: [] },
     });
@@ -160,7 +171,9 @@ describe('KnowledgeImportDialog', () => {
 
     await chooseFile(wrapper);
 
-    expect(wrapper.text()).toContain('The file has no entries to import.');
+    expect(wrapper.text()).toContain(
+      'Nothing to import: the file has no new or changed entries.'
+    );
     expect(confirmButton(wrapper).attributes('disabled')).toBeDefined();
   });
 
@@ -177,5 +190,73 @@ describe('KnowledgeImportDialog', () => {
     expect(wrapper.text()).not.toContain('knowledge.csv');
     expect(wrapper.text()).not.toContain('New entries');
     expect(confirmButton(wrapper).attributes('disabled')).toBeDefined();
+  });
+
+  it('imports into the bot whose file was checked', async () => {
+    AiAgentKnowledgeAPI.importEntries.mockResolvedValue({
+      data: { created: 1, updated: 0, errors: [] },
+    });
+    const wrapper = await mountDialog();
+
+    await chooseFile(wrapper);
+    await wrapper.setProps({ botId: 9 });
+    await confirmButton(wrapper).trigger('click');
+    await flushPromises();
+
+    expect(AiAgentKnowledgeAPI.importEntries.mock.calls).toEqual([
+      [7, { file, dryRun: true }],
+      [7, { file, dryRun: false }],
+    ]);
+  });
+
+  it('drops a check that ends after the dialog was reopened', async () => {
+    const pendingCheck = deferred();
+    AiAgentKnowledgeAPI.importEntries.mockReturnValue(pendingCheck.promise);
+    const wrapper = await mountDialog();
+
+    await chooseFile(wrapper);
+    expect(wrapper.text()).toContain('Checking the file…');
+    wrapper.findComponent({ name: 'Dialog' }).vm.close();
+    wrapper.vm.open();
+    await flushPromises();
+    pendingCheck.resolve({ data: { created: 2, updated: 1, errors: [] } });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('Checking the file…');
+    expect(wrapper.text()).not.toContain('New entries');
+    expect(wrapper.text()).not.toContain('knowledge.csv');
+    expect(chooseButton(wrapper).attributes('disabled')).toBeUndefined();
+    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined();
+  });
+
+  it('says when the import itself fails and lets it be retried', async () => {
+    AiAgentKnowledgeAPI.importEntries
+      .mockResolvedValueOnce({ data: { created: 2, updated: 1, errors: [] } })
+      .mockRejectedValueOnce({ response: { status: 500 } });
+    const wrapper = await mountDialog();
+
+    await chooseFile(wrapper);
+    await confirmButton(wrapper).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Could not import the file. Please try again.'
+    );
+    expect(wrapper.text()).toContain('New entries');
+    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined();
+    expect(wrapper.emitted('imported')).toBeUndefined();
+  });
+
+  it('says when the file cannot be checked', async () => {
+    AiAgentKnowledgeAPI.importEntries.mockRejectedValue({
+      response: { status: 500 },
+    });
+    const wrapper = await mountDialog();
+
+    await chooseFile(wrapper);
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Could not check the file. Please try again.'
+    );
   });
 });

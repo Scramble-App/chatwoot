@@ -6,11 +6,14 @@ import AiAgentKnowledgeAPI from 'dashboard/api/aiAgentKnowledge';
 import { downloadCsvFile } from 'dashboard/helper/downloadHelper';
 import { useAlert } from 'dashboard/composables';
 import KnowledgeBasePage from '../pages/KnowledgeBasePage.vue';
+import { DialogStub } from './dialogStub';
 
 vi.mock('dashboard/api/aiAgentKnowledge', () => ({
   default: {
     getKnowledgeBases: vi.fn(),
     getEntries: vi.fn(),
+    createEntry: vi.fn(),
+    importEntries: vi.fn(),
     exportEntries: vi.fn(),
   },
 }));
@@ -76,7 +79,12 @@ const dialogStub = name => ({
   template: '<div />',
 });
 
-const mountPage = async ({ query = {}, botId = 7 } = {}) => {
+// realDialogs mounts the page's own dialogs, with only the native dialog stubbed
+const mountPage = async ({
+  query = {},
+  botId = 7,
+  realDialogs = false,
+} = {}) => {
   const store = createStore({ modules: { aiAgentKnowledge } });
   const router = createRouter({
     history: createMemoryHistory(),
@@ -95,15 +103,15 @@ const mountPage = async ({ query = {}, botId = 7 } = {}) => {
   });
   await router.isReady();
 
-  const wrapper = mount(KnowledgeBasePage, {
-    global: {
-      plugins: [store, router],
-      stubs: {
+  const stubs = realDialogs
+    ? { Dialog: DialogStub }
+    : {
         KnowledgeEntryDialog: dialogStub('KnowledgeEntryDialog'),
         DeleteEntryDialog: dialogStub('DeleteEntryDialog'),
         KnowledgeImportDialog: dialogStub('KnowledgeImportDialog'),
-      },
-    },
+      };
+  const wrapper = mount(KnowledgeBasePage, {
+    global: { plugins: [store, router], stubs },
   });
   await flushPromises();
   return { wrapper, router };
@@ -113,6 +121,14 @@ const lastEntriesCall = () => AiAgentKnowledgeAPI.getEntries.mock.calls.at(-1);
 
 const findButton = (wrapper, text) =>
   wrapper.findAll('button').find(button => button.text().includes(text));
+
+const openBot = async (router, botId) => {
+  await router.replace({
+    name: 'ai_agent_knowledge',
+    params: { accountId: 1, botId },
+  });
+  await flushPromises();
+};
 
 describe('KnowledgeBasePage', () => {
   beforeEach(() => {
@@ -140,6 +156,16 @@ describe('KnowledgeBasePage', () => {
     expect(text).toContain('Published');
     expect(text).toContain('Needs answer');
     expect(text).toContain('Asked 3 times');
+  });
+
+  it('shows when a needs answer entry was last asked', async () => {
+    const threeHoursAgo = Math.floor(Date.now() / 1000) - 3 * 60 * 60;
+    AiAgentKnowledgeAPI.getEntries.mockResolvedValue(
+      entriesResponse([{ ...entries[1], last_asked_at: threeHoursAgo }])
+    );
+    const { wrapper } = await mountPage();
+
+    expect(wrapper.text()).toContain('Asked 3 times, last about 3 hours ago');
   });
 
   it('shows the status counts on the filters', async () => {
@@ -183,6 +209,25 @@ describe('KnowledgeBasePage', () => {
     expect(AiAgentKnowledgeAPI.getEntries).toHaveBeenCalledTimes(2);
     expect(lastEntriesCall()[1]).toMatchObject({ q: 'repayment', page: 1 });
     expect(input.element.value).toBe('repayment ');
+  });
+
+  it('filters by a category picked from the list', async () => {
+    const { wrapper, router } = await mountPage({ query: { page: '2' } });
+
+    await findButton(wrapper, 'All categories').trigger('click');
+    await wrapper
+      .findAll('li[role="option"]')
+      .find(option => option.text() === 'Eligibility')
+      .trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.query).toEqual({
+      category: 'Eligibility',
+    });
+    expect(lastEntriesCall()[1]).toMatchObject({
+      category: 'Eligibility',
+      page: 1,
+    });
   });
 
   it('takes the filters and page from the URL', async () => {
@@ -244,6 +289,21 @@ describe('KnowledgeBasePage', () => {
     }
   );
 
+  it('leaves the no access state when another bot is opened', async () => {
+    AiAgentKnowledgeAPI.getEntries
+      .mockRejectedValueOnce({ response: { status: 401 } })
+      .mockResolvedValue(entriesResponse());
+    const { wrapper, router } = await mountPage({ botId: 9 });
+    expect(wrapper.text()).toContain("You can't open this knowledge base");
+
+    await openBot(router, 7);
+
+    expect(lastEntriesCall()[0]).toBe(7);
+    expect(wrapper.text()).not.toContain("You can't open this knowledge base");
+    expect(wrapper.text()).toContain('KB-001');
+    expect(findButton(wrapper, 'New entry')).toBeDefined();
+  });
+
   it('shows an error alert for other failures', async () => {
     AiAgentKnowledgeAPI.getEntries.mockRejectedValue({
       response: { status: 500 },
@@ -266,13 +326,20 @@ describe('KnowledgeBasePage', () => {
     expect(filtered.text()).toContain('No matching entries');
   });
 
-  it('switches to another bot from the header', async () => {
+  it('switches to another bot from the header without a history entry', async () => {
     const { wrapper, router } = await mountPage();
+    const replace = vi.spyOn(router, 'replace');
+    const push = vi.spyOn(router, 'push');
 
     await wrapper.find('button[aria-label="Switch AI agent"]').trigger('click');
     await findButton(wrapper, 'Second Assistant').trigger('click');
     await flushPromises();
 
+    expect(replace).toHaveBeenCalledWith({
+      name: 'ai_agent_knowledge',
+      params: { accountId: '1', botId: 9 },
+    });
+    expect(push).not.toHaveBeenCalled();
     expect(router.currentRoute.value.params.botId).toBe('9');
     expect(lastEntriesCall()[0]).toBe(9);
   });
@@ -331,5 +398,68 @@ describe('KnowledgeBasePage', () => {
 
     expect(AiAgentKnowledgeAPI.exportEntries).toHaveBeenCalledWith(7);
     expect(downloadCsvFile).toHaveBeenCalledWith('knowledge-base-7.csv', blob);
+  });
+});
+
+describe('KnowledgeBasePage dialogs across a bot change', () => {
+  const file = new File(['ID,Вопрос\nKB-001,Fees?'], 'knowledge.csv', {
+    type: 'text/csv',
+  });
+
+  beforeEach(() => {
+    AiAgentKnowledgeAPI.getKnowledgeBases.mockResolvedValue({
+      data: knowledgeBases,
+    });
+    AiAgentKnowledgeAPI.getEntries.mockResolvedValue(entriesResponse());
+  });
+
+  it('closes a checked import when another bot is opened', async () => {
+    AiAgentKnowledgeAPI.importEntries.mockResolvedValue({
+      data: { created: 1, updated: 2, errors: [] },
+    });
+    const { wrapper, router } = await mountPage({
+      botId: 9,
+      realDialogs: true,
+    });
+
+    await findButton(wrapper, 'Import').trigger('click');
+    const input = wrapper.find('input[type="file"]');
+    Object.defineProperty(input.element, 'files', {
+      value: [file],
+      configurable: true,
+    });
+    await input.trigger('change');
+    await flushPromises();
+    expect(AiAgentKnowledgeAPI.importEntries).toHaveBeenCalledWith(9, {
+      file,
+      dryRun: true,
+    });
+    expect(wrapper.find('.dialog-stub').exists()).toBe(true);
+
+    // e.g. the browser back button while the dialog is open
+    await openBot(router, 7);
+
+    expect(wrapper.find('.dialog-stub').exists()).toBe(false);
+    expect(AiAgentKnowledgeAPI.importEntries).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes a new entry when another bot is opened', async () => {
+    const { wrapper, router } = await mountPage({
+      botId: 9,
+      realDialogs: true,
+    });
+
+    await findButton(wrapper, 'New entry').trigger('click');
+    await wrapper
+      .find('#ai-agent-entry-question')
+      .setValue('What are the fees?');
+    expect(wrapper.find('.dialog-stub').exists()).toBe(true);
+
+    await openBot(router, 7);
+
+    expect(wrapper.find('.dialog-stub').exists()).toBe(false);
+    await findButton(wrapper, 'New entry').trigger('click');
+    expect(wrapper.find('#ai-agent-entry-question').element.value).toBe('');
+    expect(AiAgentKnowledgeAPI.createEntry).not.toHaveBeenCalled();
   });
 });
