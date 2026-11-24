@@ -7,8 +7,8 @@ module AiAgentOpenaiHelpers
     create(:integrations_hook, :openai, account: account, settings: { 'api_key' => 'sk-test' })
   end
 
-  def openai_usage(input: 100, cached: 40, output: 20)
-    { input_tokens: input, input_tokens_details: { cached_tokens: cached }, output_tokens: output }
+  def openai_usage(input: 100, cached: 40, written: 10, output: 20)
+    { input_tokens: input, input_tokens_details: { cached_tokens: cached, cache_write_tokens: written }, output_tokens: output }
   end
 
   # The final reply: a reasoning item and a message with the JSON output

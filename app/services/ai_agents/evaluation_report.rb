@@ -8,7 +8,10 @@ class AiAgents::EvaluationReport
     scenarios_passed: 'Scenarios passed'
   }.freeze
 
-  # results: the results of the cases and scenarios; prices: USD per 1M tokens, { input:, cached_input:, output: }
+  # The 12-hour cache writes of the static prompt cost 2.5 times the input price
+  CACHE_WRITE_PRICE_FACTOR = 2.5
+
+  # results: the results of the cases and scenarios; prices: USD per 1M tokens, { input:, cached_input:, cache_write:, output: }
   def initialize(results:, prices:, metadata:)
     @cases = results.reject { |result| result[:type] == 'scenario' }
     @scenarios = results.select { |result| result[:type] == 'scenario' }
@@ -76,20 +79,29 @@ class AiAgents::EvaluationReport
   end
 
   def tokens
-    @tokens ||= %i[requests input_tokens cached_input_tokens output_tokens].index_with do |key|
+    @tokens ||= %i[requests input_tokens cached_input_tokens cache_write_tokens output_tokens].index_with do |key|
       outcomes.sum { |result| result.dig(:usage, key).to_i }
     end
   end
 
-  # Cached input tokens are part of the input tokens; without a cached price they cost the input price
+  # The input tokens include the cached and the cache write tokens
   def cost
     input = price(:input)
     output = price(:output)
     return if input.nil? || output.nil?
 
-    cached = price(:cached_input) || input
-    uncached_tokens = tokens[:input_tokens] - tokens[:cached_input_tokens]
-    ((uncached_tokens * input) + (tokens[:cached_input_tokens] * cached) + (tokens[:output_tokens] * output)) / 1_000_000.0
+    ordinary_tokens = tokens[:input_tokens] - tokens[:cached_input_tokens] - tokens[:cache_write_tokens]
+    usd = (ordinary_tokens * input) + token_prices(input, output).sum { |key, token_price| tokens[key] * token_price }
+    usd / 1_000_000.0
+  end
+
+  # Without their own prices, cached tokens cost the input price and cache writes 2.5 times the input price
+  def token_prices(input, output)
+    {
+      cached_input_tokens: price(:cached_input) || input,
+      cache_write_tokens: price(:cache_write) || (input * CACHE_WRITE_PRICE_FACTOR),
+      output_tokens: output
+    }
   end
 
   def price(key)
@@ -102,7 +114,7 @@ class AiAgents::EvaluationReport
       'Ungrounded replies' => metrics[:ungrounded],
       'Latency p50 / p95' => metrics[:latency_ms].values.map { |value| value ? "#{(value / 1000.0).round(1)} s" : 'n/a' }.join(' / '),
       'OpenAI requests' => tokens[:requests],
-      'Tokens input / cached / output' => tokens.values_at(:input_tokens, :cached_input_tokens, :output_tokens).join(' / '),
+      'Tokens input / cached / cache write / output' => tokens.except(:requests).values.join(' / '),
       'Estimated cost' => metrics[:cost_usd] ? format('$%.4f', metrics[:cost_usd]) : 'n/a, set INPUT_PRICE_PER_1M and OUTPUT_PRICE_PER_1M'
     }
   end

@@ -25,6 +25,24 @@ RSpec.describe AiAgents::Prompt do
     end
   end
 
+  describe '.explicit_cache?' do
+    it 'is true from GPT-5.6 on' do
+      expect(%w[gpt-6.2-sol gpt-6-sol gpt-5.6 gpt-5.10 gpt-7].map { |model| described_class.explicit_cache?(model) }).to all(be(true))
+      expect(['gpt-4.1-mini', 'gpt-4o', 'gpt-5', 'gpt-5.5-pro', 'o4-mini', nil].map { |model| described_class.explicit_cache?(model) })
+        .to all(be(false))
+    end
+  end
+
+  describe '#static_message' do
+    it 'is a developer message with the instructions, ending with a 12-hour cache breakpoint when asked' do
+      expect(prompt.static_message(explicit_cache: true)).to eq(
+        role: 'developer',
+        content: [{ type: 'input_text', text: prompt.instructions, prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' } }]
+      )
+      expect(prompt.static_message(explicit_cache: false)).to eq(role: 'developer', content: [{ type: 'input_text', text: prompt.instructions }])
+    end
+  end
+
   describe '#context_message' do
     it 'lists the visitor facts without the email address and the team availability' do
       message = prompt.context_message(visitor: { name: 'Anna', company: nil, email_known: true, browser_language: 'de' }, team_available: false)

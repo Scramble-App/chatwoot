@@ -56,7 +56,7 @@ RSpec.describe AiAgents::ReplyService do
     expect(conversation.reload).to have_attributes(status: 'pending', label_list: [])
     expect(Rails.logger).to have_received(:info).with(
       "[ai-agent] conversation=#{conversation.id} agent_bot=#{agent_bot.id} model=gpt-agent-spec requests=1 " \
-      'input_tokens=100 cached_input_tokens=40 output_tokens=20'
+      'input_tokens=100 cached_input_tokens=40 cache_write_tokens=10 output_tokens=20'
     )
   end
 
@@ -90,7 +90,7 @@ RSpec.describe AiAgents::ReplyService do
 
     reply
 
-    expect(requests.first['input'].first['content']).to include('- A colleague is available now: yes')
+    expect(requests.first['input'].second['content']).to include('- A colleague is available now: yes')
     expect(requests.second['input'].last).to include('output' => { team_available: true }.to_json)
     expect(bot_messages.pluck(:private)).to eq([false, true])
     expect(note).to include('Reason: no confirmed answer in the knowledge base', 'Question: Can loans be repaid in crypto?', 'Language: en',

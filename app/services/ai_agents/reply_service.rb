@@ -113,7 +113,8 @@ class AiAgents::ReplyService
     usage = @responder.usage
     Rails.logger.info(
       "[ai-agent] conversation=#{conversation.id} agent_bot=#{agent_bot.id} model=#{@responder.model} requests=#{usage[:requests]} " \
-      "input_tokens=#{usage[:input_tokens]} cached_input_tokens=#{usage[:cached_input_tokens]} output_tokens=#{usage[:output_tokens]}"
+      "input_tokens=#{usage[:input_tokens]} cached_input_tokens=#{usage[:cached_input_tokens]} cache_write_tokens=#{usage[:cache_write_tokens]} " \
+      "output_tokens=#{usage[:output_tokens]}"
     )
   end
 end

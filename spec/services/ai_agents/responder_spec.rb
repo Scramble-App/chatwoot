@@ -29,6 +29,10 @@ RSpec.describe AiAgents::Responder do
     request['input'].select { |item| item['type'] == 'function_call_output' }.to_h { |item| [item['call_id'], JSON.parse(item['output'])] }
   end
 
+  def static_text(request)
+    request['input'].first['content'].first['text']
+  end
+
   it 'sends a stateless request with the tools and the strict output schema' do
     requests = stub_openai_responses(openai_reply)
 
@@ -37,22 +41,24 @@ RSpec.describe AiAgents::Responder do
     body = requests.first
     expect(body).to include('model' => 'gpt-agent-spec', 'store' => false, 'tool_choice' => 'auto',
                             'reasoning' => { 'effort' => AiAgents::Settings::DEFAULT_REASONING_EFFORT })
-    expect(body.keys).not_to include('previous_response_id', 'include')
+    expect(body.keys).not_to include('previous_response_id', 'include', 'instructions')
+    expect(body['prompt_cache_key']).to eq("ai-agent-bot-#{agent_bot.id}")
     expect(body['tools'].pluck('name')).to eq(%w[open_page save_contact hand_off])
     expect(body['text']).to eq('format' => JSON.parse(AiAgents::Prompt::OUTPUT_FORMAT.to_json))
   end
 
-  it 'sends the static prompt as instructions and the facts and history as input' do
+  it 'sends the static prompt, then the facts and the history as input' do
     requests = stub_openai_responses(openai_reply)
 
     responder.perform
 
     body = requests.first
-    expect(body['instructions']).to start_with('FIXED RULES').and include('#KB-001 Basics | How does it work?', "[#{page.id}] Plans — #{page.url}")
-    expect(body['instructions']).not_to include('A draft question?', 'Never fetched')
     expect(body['input'].first).to include('role' => 'developer')
-    expect(body['input'].first['content']).to include('- Brand or company: GreenSip', '- Email: unknown', '- Browser language: de')
-    expect(body['input'].drop(1)).to eq(history.map(&:stringify_keys))
+    expect(static_text(body)).to start_with('FIXED RULES').and include('#KB-001 Basics | How does it work?', "[#{page.id}] Plans — #{page.url}")
+    expect(static_text(body)).not_to include('A draft question?', 'Never fetched')
+    expect(body['input'].second).to include('role' => 'developer')
+    expect(body['input'].second['content']).to include('- Brand or company: GreenSip', '- Email: unknown', '- Browser language: de')
+    expect(body['input'].drop(2)).to eq(history.map(&:stringify_keys))
   end
 
   it 'returns the reply with its citations and the token usage' do
@@ -61,7 +67,7 @@ RSpec.describe AiAgents::Responder do
     result = responder.perform
 
     expect(result.to_h).to include(reply: 'It works like this.', kind: 'answer', language: 'en', entry_keys: ['KB-001'], page_ids: [], grounded: true)
-    expect(result.usage).to eq(requests: 1, input_tokens: 100, cached_input_tokens: 40, output_tokens: 20)
+    expect(result.usage).to eq(requests: 1, input_tokens: 100, cached_input_tokens: 40, cache_write_tokens: 10, output_tokens: 20)
   end
 
   it 'runs the tools and resends the earlier output items with the tool results' do
@@ -82,7 +88,7 @@ RSpec.describe AiAgents::Responder do
     expect(executor_calls).to eq([['save_contact', { 'name' => 'Anna', 'email' => 'anna@example.test' }]])
     expect(result.tool_calls.pluck(:name)).to eq(%w[open_page save_contact])
     expect(result.to_h).to include(grounded: true, page_ids: [page.id])
-    expect(result.usage[:requests]).to eq(2)
+    expect(result.usage).to include(requests: 2, input_tokens: 200, cached_input_tokens: 80, cache_write_tokens: 20)
   end
 
   it 'reads the pages with content, also while a refresh is pending or after a failed fetch' do
@@ -93,7 +99,7 @@ RSpec.describe AiAgents::Responder do
 
     result = responder.perform
 
-    expect(requests.first['instructions']).to include("[#{refreshing.id}] #{refreshing.url}\n[#{failed.id}] Failed — #{failed.url}")
+    expect(static_text(requests.first)).to include("[#{refreshing.id}] #{refreshing.url}\n[#{failed.id}] Failed — #{failed.url}")
     expect(tool_outputs(requests.second).values).to eq([{ 'title' => 'Failed', 'url' => failed.url, 'content' => 'Previous text.' }])
     expect(result.grounded).to be(true)
   end
@@ -141,6 +147,39 @@ RSpec.describe AiAgents::Responder do
 
     expect { responder.perform }.to raise_error(described_class::Error, 'OpenAI called tools after the last tool round')
     expect(responder.usage[:requests]).to eq(4)
+  end
+
+  describe 'prompt caching' do
+    def cache_settings(model)
+      agent_bot.update!(bot_config: { 'model' => model })
+      requests = stub_openai_responses(openai_reply)
+      described_class.new(agent_bot: agent_bot, visitor: visitor, team_available: true, history: history, executor: executor).perform
+      [requests.first['input'].first['content'].first['prompt_cache_breakpoint'], requests.first['prompt_cache_options']]
+    end
+
+    it 'ends the cached prefix after the static prompt and caches nothing else on GPT-5.6 and later' do
+      expect(%w[gpt-6.2-sol gpt-6-sol gpt-5.6].map { |model| cache_settings(model) })
+        .to all(eq([{ 'mode' => 'explicit', 'ttl' => '12h' }, { 'mode' => 'explicit' }]))
+    end
+
+    it 'leaves caching to older models' do
+      expect(%w[gpt-4.1-mini gpt-5 o4-mini].map { |model| cache_settings(model) }).to all(eq([nil, nil]))
+    end
+
+    it 'sends the same static prompt for every conversation of the bot' do
+      agent_bot.update!(bot_config: { 'model' => 'gpt-6.2-sol' })
+      requests = stub_openai_responses(openai_reply)
+      other_visitor = { name: 'Anna', company: nil, email_known: true, browser_language: 'en' }
+
+      responder.perform
+      described_class.new(agent_bot: agent_bot, visitor: other_visitor, team_available: false, history: [{ role: 'user', content: 'Hallo?' }],
+                          executor: executor).perform
+
+      expect(requests.first['input'].first['content'].first).to include('prompt_cache_breakpoint')
+      expect(requests.first['input'].first).to eq(requests.second['input'].first)
+      expect(requests.first['input'].second).not_to eq(requests.second['input'].second)
+      expect(requests.pluck('prompt_cache_key').uniq).to eq(["ai-agent-bot-#{agent_bot.id}"])
+    end
   end
 
   describe 'grounding' do

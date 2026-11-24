@@ -1,6 +1,6 @@
-# The prompt of the AI agent. The instructions hold only what is the same for every conversation of the bot (fixed rules,
-# tone of voice, instructions, knowledge base, page index), in this order, so OpenAI can cache them as a prompt prefix.
-# The facts of a conversation go into the context message, the first input message.
+# The prompt of the AI agent. #instructions is the static prompt: only what is the same for every conversation of the bot
+# (fixed rules, tone of voice, instructions, knowledge base, page index), in this order, so OpenAI can cache it as a prompt
+# prefix. The Responder sends it as the first input message, then the context message with the facts of the conversation.
 class AiAgents::Prompt
   KINDS = %w[answer conversation clarification handoff].freeze
   HANDOFF_REASONS = %w[no_answer human_requested other].freeze
@@ -107,6 +107,20 @@ class AiAgents::Prompt
   # Contact details come from visitors, so they are kept short and on one line
   FACT_LIMIT = 100
 
+  # Cached for at least 12 hours (a write costs 2.5 times the input price instead of 1.25 for 30 minutes), as visitors can
+  # come hours apart. A changed knowledge base or setting changes the prefix, so it is cached anew.
+  CACHE_BREAKPOINT = { mode: 'explicit', ttl: '12h' }.freeze
+  # gpt-X or gpt-X.Y
+  MODEL_VERSION = /\Agpt-(\d+)(?:\.(\d+))?/
+  EXPLICIT_CACHE_VERSION = [5, 6].freeze
+
+  # GPT-5.6 and later write the implicit cache breakpoint at the end of the request, so they reuse a shared prefix only up
+  # to an explicit breakpoint
+  def self.explicit_cache?(model)
+    major, minor = model.to_s.match(MODEL_VERSION)&.captures
+    major.present? && ([major.to_i, minor.to_i] <=> EXPLICIT_CACHE_VERSION) >= 0
+  end
+
   # entries: the published knowledge entries of the bot; pages: its pages with content (a title can be blank)
   def initialize(settings:, entries:, pages:)
     @settings = settings
@@ -122,6 +136,13 @@ class AiAgents::Prompt
       "#{KNOWLEDGE_BASE_HEADER}\n#{AiAgents::KnowledgeFormatter.new(@entries).to_s.presence || '(empty)'}",
       "#{PAGES_HEADER}\n#{pages_index.presence || '(none)'}"
     ].join("\n\n")
+  end
+
+  # The first input message, as top-level instructions can't carry a cache breakpoint
+  def static_message(explicit_cache:)
+    text = { type: 'input_text', text: instructions }
+    text[:prompt_cache_breakpoint] = CACHE_BREAKPOINT if explicit_cache
+    { role: 'developer', content: [text] }
   end
 
   # visitor: { name:, company:, email_known:, browser_language: }, with nil for unknown details

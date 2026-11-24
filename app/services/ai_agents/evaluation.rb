@@ -13,7 +13,7 @@ class AiAgents::Evaluation
   HANDED_OFF = 'skipped: an earlier turn handed the conversation off'.freeze
 
   # limit: the sample size of phrasings (all by default), drawn with seed; only: one of SUITES; concurrency: 1 to 4;
-  # prices: USD per 1M tokens, { input:, cached_input:, output: }
+  # prices: USD per 1M tokens, { input:, cached_input:, cache_write:, output: }
   def initialize(agent_bot:, cases_path: nil, limit: nil, only: nil, concurrency: nil, seed: nil, prices: {}) # rubocop:disable Metrics/ParameterLists
     @agent_bot = agent_bot
     @cases_path = cases_path.presence

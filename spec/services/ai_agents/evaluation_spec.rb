@@ -91,8 +91,9 @@ RSpec.describe AiAgents::Evaluation do
       scenarios_passed: { passed: 1, total: 2, rate: 0.5 },
       errors: 0,
       ungrounded: 0,
-      tokens: { requests: 12, input_tokens: 1200, cached_input_tokens: 480, output_tokens: 240 },
-      cost_usd: 0.0036
+      tokens: { requests: 12, input_tokens: 1200, cached_input_tokens: 480, cache_write_tokens: 120, output_tokens: 240 },
+      # 600 ordinary input tokens at 2, 480 cached at 0.5, 120 written at 2.5 x 2 and 240 output at 8, per 1M tokens
+      cost_usd: 0.00396
     )
     expect(report[:metrics][:latency_ms].values).to all(be_a(Integer))
     expect(report[:cases].map { |result| [result[:id], result[:passed]] }).to eq(
@@ -106,7 +107,7 @@ RSpec.describe AiAgents::Evaluation do
     report = evaluate(only: 'scenarios').to_h
 
     turn_requests = requests.select { |body| body['input'].last['role'] == 'user' }
-    expect(turn_requests.map { |body| body['input'].first['content'][/Brand or company: .*/] })
+    expect(turn_requests.map { |body| body['input'].second['content'][/Brand or company: .*/] })
       .to eq(['Brand or company: unknown', 'Brand or company: GreenSip', 'Brand or company: unknown'])
     sc_handoff = report[:scenarios].find { |scenario| scenario[:id] == 'sc-handoff' }
     expect(sc_handoff[:turns].pluck(:passed, :skipped)).to eq([[true, nil], [false, true]])
@@ -129,6 +130,13 @@ RSpec.describe AiAgents::Evaluation do
     expect(first[:cases].size).to eq(2)
     expect(first[:cases].pluck(:id)).to eq(second[:cases].pluck(:id))
     expect(first[:options]).to include(limit: 2, concurrency: 3, seed: 1)
+  end
+
+  it 'prices cache writes as given' do
+    report = evaluate(only: 'phrasings', prices: { input: '1', output: '1', cache_write: '10' }).to_h
+
+    # 150 ordinary input tokens, 120 cached at the input price, 30 written at 10 and 60 output, per 1M tokens
+    expect(report[:metrics][:cost_usd]).to eq(0.00063)
   end
 
   it 'prints a summary table with the failures' do

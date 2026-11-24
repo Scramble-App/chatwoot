@@ -5,6 +5,10 @@
 # The request is stateless (store: false), so every round resends the whole input plus the output items of the earlier
 # rounds, reasoning items included, and the function_call_output items. Stateless responses carry the encrypted reasoning
 # content by default, so no include parameter is needed.
+#
+# The static prompt, the same for every conversation of the bot, is the first input message so OpenAI can cache it. On
+# GPT-5.6 and later it ends with an explicit cache breakpoint, and explicit mode keeps the rest of the request out of the
+# cache (see AiAgents::Prompt). Older models cache prompt prefixes by themselves.
 class AiAgents::Responder
   class Error < StandardError; end
 
@@ -31,13 +35,14 @@ class AiAgents::Responder
     @executor = executor
     @tool_calls = []
     @tool_rounds = 0
-    @usage = { requests: 0, input_tokens: 0, cached_input_tokens: 0, output_tokens: 0 }
+    @usage = { requests: 0, input_tokens: 0, cached_input_tokens: 0, cache_write_tokens: 0, output_tokens: 0 }
   end
 
   def perform
     raise Error, 'The OpenAI integration of the account is not enabled' if hook.blank?
 
-    input = [{ role: 'developer', content: prompt.context_message(visitor: @visitor, team_available: @team_available) }, *@history]
+    context = { role: 'developer', content: prompt.context_message(visitor: @visitor, team_available: @team_available) }
+    input = [static_message, context, *@history]
     output = complete(input)
     problems = grounding_problems(output)
     if problems.any?
@@ -79,8 +84,8 @@ class AiAgents::Responder
     @prompt ||= AiAgents::Prompt.new(settings: settings, entries: entries, pages: pages)
   end
 
-  def instructions
-    @instructions ||= prompt.instructions
+  def static_message
+    @static_message ||= prompt.static_message(explicit_cache: AiAgents::Prompt.explicit_cache?(model))
   end
 
   # Runs rounds until the model gives its final reply; output items and tool results are appended to the input
@@ -112,18 +117,18 @@ class AiAgents::Responder
   def request_body(input)
     body = {
       model: model,
-      instructions: instructions,
       input: input,
       tools: AiAgents::Prompt::TOOLS,
       tool_choice: @tool_rounds < MAX_TOOL_ROUNDS ? 'auto' : 'none',
       text: { format: AiAgents::Prompt::OUTPUT_FORMAT },
-      store: false
+      store: false,
+      # Routes requests with the same static prompt together and accounts their cache use per bot
+      prompt_cache_key: "ai-agent-bot-#{@agent_bot.id}"
     }
+    body[:prompt_cache_options] = { mode: 'explicit' } if AiAgents::Prompt.explicit_cache?(model)
     MessageTranslations::OpenaiSettings.apply_model_options!(body, hook)
     effort = settings.reasoning_effort
-    return body.except(:reasoning) if effort == MessageTranslations::OpenaiSettings::DEFAULT_REASONING_EFFORT
-
-    body.merge(reasoning: { effort: effort })
+    effort == MessageTranslations::OpenaiSettings::DEFAULT_REASONING_EFFORT ? body.except(:reasoning) : body.merge(reasoning: { effort: effort })
   end
 
   def client
@@ -135,6 +140,7 @@ class AiAgents::Responder
     @usage[:requests] += 1
     @usage[:input_tokens] += usage['input_tokens'].to_i
     @usage[:cached_input_tokens] += usage.dig('input_tokens_details', 'cached_tokens').to_i
+    @usage[:cache_write_tokens] += usage.dig('input_tokens_details', 'cache_write_tokens').to_i
     @usage[:output_tokens] += usage['output_tokens'].to_i
   end
 
@@ -178,20 +184,16 @@ class AiAgents::Responder
 
   def run_tool(call)
     arguments = JSON.parse(call['arguments'].to_s)
-    result = tool_result(call['name'], arguments)
+    result = case call['name']
+             when 'open_page' then open_page(arguments)
+             when 'save_contact' then save_contact(arguments)
+             when 'hand_off' then hand_off(arguments)
+             else { error: "There is no tool named #{call['name']}" }
+             end
     @tool_calls << { name: call['name'], arguments: arguments, error: result[:error] }.compact
     result
   rescue JSON::ParserError
     { error: 'The arguments are not valid JSON' }
-  end
-
-  def tool_result(name, arguments)
-    case name
-    when 'open_page' then open_page(arguments)
-    when 'save_contact' then save_contact(arguments)
-    when 'hand_off' then hand_off(arguments)
-    else { error: "There is no tool named #{name}" }
-    end
   end
 
   def open_page(arguments)
