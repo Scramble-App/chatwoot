@@ -30,7 +30,7 @@ class AiAgents::Responder
   # A page whose fetches keep failing drops out once its last fetched content is this old
   PAGE_MAX_AGE = 7.days
   CORRECTION = 'Your reply was not sent because %<problems>s. Cite in entry_keys and page_ids the knowledge base entries or pages ' \
-               "you used, or say you don't have a confirmed answer and offer to pass the question to the team.".freeze
+               "you used, or tell the visitor you don't know and offer to pass the question to the team.".freeze
 
   # The token usage so far, also after an Error
   attr_reader :usage
