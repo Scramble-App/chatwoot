@@ -45,7 +45,9 @@ class AgentBot < ApplicationRecord
   enum bot_type: { webhook: 0, ai_agent: 1 }
 
   validates :outgoing_url, length: { maximum: Limits::URL_LENGTH_LIMIT }
-  validate :validate_ai_agent_settings, if: :ai_agent?
+  # Only when the settings can change, so a later deleted handoff team doesn't block other updates of the bot
+  before_validation :normalize_ai_agent_settings, if: :ai_agent_settings_changed?
+  validate :validate_ai_agent_settings, if: :ai_agent_settings_changed?
 
   def ai_agent_settings
     AiAgents::Settings.new(self)
@@ -77,6 +79,14 @@ class AgentBot < ApplicationRecord
   end
 
   private
+
+  def ai_agent_settings_changed?
+    ai_agent? && (new_record? || will_save_change_to_bot_config? || will_save_change_to_bot_type?)
+  end
+
+  def normalize_ai_agent_settings
+    self.bot_config = AiAgents::Settings.normalize_line_breaks(bot_config) if bot_config.is_a?(Hash)
+  end
 
   def validate_ai_agent_settings
     ai_agent_settings.validation_errors.each { |message| errors.add(:bot_config, message) }

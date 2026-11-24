@@ -15,6 +15,15 @@ RSpec.describe AgentBotPage do
       expect(described_class.new).to be_pending
     end
 
+    it 'rejects a blank or unknown status instead of raising' do
+      ['archived', '', nil].each do |status|
+        page = build(:agent_bot_page, agent_bot: agent_bot, status: status)
+
+        expect(page).not_to be_valid, "expected #{status.inspect} to be rejected"
+        expect(page.errors[:status]).to eq(['is not included in the list'])
+      end
+    end
+
     it 'takes the account from the bot when blank' do
       page = create(:agent_bot_page, agent_bot: agent_bot, account: nil)
 

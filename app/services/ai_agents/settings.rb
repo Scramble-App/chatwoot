@@ -3,10 +3,11 @@
 class AiAgents::Settings
   KEYS = %w[model reasoning_effort tone_of_voice instructions handoff_team_id max_replies_per_conversation fallback_message].freeze
   TEXT_LIMITS = { 'model' => 255, 'reasoning_effort' => 255, 'tone_of_voice' => 5_000, 'instructions' => 10_000, 'fallback_message' => 1_000 }.freeze
+  MULTILINE_KEYS = %w[tone_of_voice instructions fallback_message].freeze
   # Same names as MessageTranslations::OpenaiSettings accepts; OpenaiResponsesClient drops an effort the model rejects
   REASONING_EFFORT_FORMAT = /\A[a-z_]+\z/
   MAX_REPLIES_RANGE = (1..200)
-  DEFAULT_REASONING_EFFORT = 'low'.freeze
+  DEFAULT_REASONING_EFFORT = 'medium'.freeze
   DEFAULT_MAX_REPLIES_PER_CONVERSATION = 30
 
   # The model default is left out: it is the account's OpenAI integration model
@@ -18,6 +19,13 @@ class AiAgents::Settings
       max_replies_per_conversation: DEFAULT_MAX_REPLIES_PER_CONVERSATION,
       fallback_message: AiAgents::Defaults::FALLBACK_MESSAGE
     }
+  end
+
+  # Multipart form data sends every line break as CRLF; texts keep LF, so they count against the limits as typed
+  def self.normalize_line_breaks(config)
+    config.stringify_keys.to_h do |key, value|
+      [key, MULTILINE_KEYS.include?(key) && value.is_a?(String) ? value.gsub(/\r\n?/, "\n") : value]
+    end
   end
 
   def initialize(agent_bot)

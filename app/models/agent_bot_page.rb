@@ -33,7 +33,7 @@ class AgentBotPage < ApplicationRecord
   belongs_to :account
   belongs_to :agent_bot
 
-  enum status: { pending: 0, fetched: 1, failed: 2 }
+  enum :status, { pending: 0, fetched: 1, failed: 2 }, validate: true
 
   before_validation :ensure_account_id
 

@@ -165,6 +165,36 @@ RSpec.describe AgentBot do
       expect(agent_bot.errors.full_messages).to eq(['Bot config max_replies_per_conversation must be a whole number from 1 to 200'])
     end
 
+    it 'stores line breaks sent as CRLF as LF and counts them that way against the limits' do
+      tone_of_voice = "#{'a' * 4_998}\r\nb"
+      agent_bot.bot_config = { 'tone_of_voice' => tone_of_voice, 'instructions' => "One\rTwo\r\nThree", 'fallback_message' => "Sorry.\r\n" }
+
+      expect(tone_of_voice.length).to eq(5_001)
+      expect(agent_bot.save).to be(true)
+      expect(agent_bot.reload.bot_config).to eq(
+        'tone_of_voice' => "#{'a' * 4_998}\nb", 'instructions' => "One\nTwo\nThree", 'fallback_message' => "Sorry.\n"
+      )
+    end
+
+    it 'saves other changes of a bot whose handoff team was deleted until its settings change' do
+      team = create(:team, account: account)
+      bot = create(:agent_bot, :ai_agent, account: account, bot_config: { 'handoff_team_id' => team.id })
+      team.destroy!
+      bot.reload
+
+      expect(bot.update(name: 'Renamed')).to be(true)
+      expect { bot.reset_secret! }.not_to raise_error
+      expect(bot.update(bot_config: { 'handoff_team_id' => team.id, 'tone_of_voice' => 'Calm' })).to be(false)
+      expect(bot.errors[:bot_config]).to eq(['handoff_team_id must be a team of this account'])
+    end
+
+    it 'validates the settings when a webhook bot becomes an AI agent' do
+      bot = create(:agent_bot, account: account, bot_config: { 'webhook_url' => 'https://example.com' })
+
+      expect(bot.update(bot_type: :ai_agent)).to be(false)
+      expect(bot.errors[:bot_config]).to eq(['has unknown keys: webhook_url'])
+    end
+
     it 'leaves the config of webhook bots alone' do
       webhook_bot = build(:agent_bot, bot_config: { 'webhook_url' => 'https://example.com', 'max_replies_per_conversation' => 0 })
 

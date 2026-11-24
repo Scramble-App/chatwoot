@@ -28,6 +28,15 @@ RSpec.describe AgentBotKnowledgeEntry do
       expect(entry.asked_count).to eq(0)
     end
 
+    it 'rejects a blank or unknown status instead of raising' do
+      ['archived', '', nil].each do |status|
+        entry = build(:agent_bot_knowledge_entry, agent_bot: agent_bot, status: status)
+
+        expect(entry).not_to be_valid, "expected #{status.inspect} to be rejected"
+        expect(entry.errors[:status]).to eq(['is not included in the list'])
+      end
+    end
+
     it 'needs an answer or a short answer to be published' do
       entry = build(:agent_bot_knowledge_entry, agent_bot: agent_bot, answer: '', short_answer: nil)
 
@@ -89,11 +98,102 @@ RSpec.describe AgentBotKnowledgeEntry do
       expect(create_entry(key: 'PRICING-1').key).to eq('PRICING-1')
     end
 
+    it 'trims a given key and keeps its case' do
+      expect(create_entry(key: " KB-050 \n").key).to eq('KB-050')
+      expect(create_entry(key: 'kb-052').key).to eq('kb-052')
+    end
+
+    it 'rejects whitespace inside a key' do
+      ['KB 053', "KB-\n054", "KB-\t055"].each do |key|
+        entry = build(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: key)
+
+        expect(entry).not_to be_valid, "expected #{key.inspect} to be rejected"
+        expect(entry.errors[:key]).to eq(['is invalid'])
+      end
+    end
+
+    it 'finds an entry by its key given with surrounding whitespace' do
+      entry = create_entry(key: 'KB-060')
+
+      expect(agent_bot.knowledge_entries.find_by(key: " KB-060\n")).to eq(entry)
+    end
+
     it 'is unique per bot' do
       create_entry(key: 'KB-001')
 
       expect(build(:agent_bot_knowledge_entry, agent_bot: agent_bot, key: 'KB-001')).not_to be_valid
       expect(build(:agent_bot_knowledge_entry, key: 'KB-001')).to be_valid
+    end
+
+    it 'gives bulk callers the next number of the bot' do
+      expect(described_class.next_key_number(agent_bot.id)).to eq(1)
+
+      create_entry(key: 'KB-041')
+
+      expect(described_class.next_key_number(agent_bot.id)).to eq(42)
+    end
+
+    it 'holds the key lock of a bot while the transaction lasts, without blocking other bots' do
+      described_class.lock_keys!(agent_bot.id)
+      other_session = ActiveRecord::Base.connection_pool.checkout
+      try_lock = ->(bot_id) { other_session.select_value("SELECT pg_try_advisory_xact_lock(#{described_class::KEY_LOCK_NAMESPACE}, #{bot_id})") }
+
+      expect(try_lock.call(agent_bot.id)).to be(false)
+      expect(try_lock.call(agent_bot.id + 1)).to be(true)
+    ensure
+      ActiveRecord::Base.connection_pool.checkin(other_session) if other_session
+    end
+  end
+
+  describe 'keys of entries created at the same time' do
+    # Each thread needs its own connection, and both must see the bot, so nothing runs in a rolled back test
+    # transaction here. The rows are inserted without callbacks and deleted after the example.
+    self.use_transactional_tests = false
+
+    let(:connection) { ActiveRecord::Base.connection }
+    let!(:account_id) do
+      connection.select_value("INSERT INTO accounts (name, created_at, updated_at) VALUES ('Key lock', now(), now()) RETURNING id")
+    end
+    let!(:agent_bot_id) do
+      connection.select_value(
+        "INSERT INTO agent_bots (name, account_id, bot_type, created_at, updated_at) VALUES ('Key lock', #{account_id}, 1, now(), now()) RETURNING id"
+      )
+    end
+
+    # The entries go with the bot through the cascade; the sequences are the ones the accounts insert trigger creates
+    after do
+      connection.execute("DELETE FROM agent_bots WHERE id = #{agent_bot_id}")
+      connection.execute("DELETE FROM accounts WHERE id = #{account_id}")
+      connection.execute("DROP SEQUENCE IF EXISTS conv_dpid_seq_#{account_id}, camp_dpid_seq_#{account_id}")
+    end
+
+    def create_entry
+      described_class.create!(agent_bot_id: agent_bot_id, question: 'Is this a sample question?', status: :needs_answer)
+    end
+
+    def wait_until_another_session_waits_for_the_key_lock
+      sql = "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted " \
+            'AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) ' \
+            "AND classid = #{described_class::KEY_LOCK_NAMESPACE} AND objid = #{agent_bot_id})"
+      deadline = 5.seconds.from_now
+      sleep 0.05 until connection.select_value(sql) || Time.current > deadline
+    end
+
+    it 'numbers them one after the other' do
+      first_created = Queue.new
+      second = Thread.new do
+        first_created.pop
+        ActiveRecord::Base.connection_pool.with_connection { create_entry.key }
+      end
+
+      first_key = described_class.transaction do
+        key = create_entry.key
+        first_created << true
+        wait_until_another_session_waits_for_the_key_lock
+        key
+      end
+
+      expect([first_key, second.value]).to eq(%w[KB-001 KB-002])
     end
   end
 
