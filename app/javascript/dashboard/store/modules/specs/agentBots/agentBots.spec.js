@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { actions } from '../../agentBots';
 import types from '../../../mutation-types';
-import { agentBotRecords, agentBotData } from './fixtures';
+import { agentBotRecords, agentBotData, aiAgentBotData } from './fixtures';
 
 const commit = vi.fn();
 global.axios = axios;
@@ -41,6 +41,32 @@ describe('#actions', () => {
       expect(axios.post.mock.calls.length).toBe(1);
       const formDataArg = axios.post.mock.calls[0][1];
       expect(formDataArg instanceof FormData).toBe(true);
+      expect(formDataArg.get('bot_type')).toBe('webhook');
+      expect(formDataArg.get('outgoing_url')).toBe('https://test.com');
+      expect(
+        [...formDataArg.keys()].some(key => key.startsWith('bot_config'))
+      ).toBe(false);
+    });
+
+    it('sends the AI agent settings as bot_config fields', async () => {
+      axios.post.mockResolvedValue({ data: agentBotRecords[0] });
+      await actions.create({ commit }, aiAgentBotData);
+
+      const formDataArg = axios.post.mock.calls[0][1];
+      expect(formDataArg.get('bot_type')).toBe('ai_agent');
+      expect(formDataArg.get('outgoing_url')).toBe('');
+      expect(formDataArg.get('bot_config[model]')).toBe('gpt-test-mini');
+      expect(formDataArg.get('bot_config[tone_of_voice]')).toBe('');
+      expect(formDataArg.get('bot_config[instructions]')).toBe(
+        'Keep replies short.'
+      );
+      expect(formDataArg.get('bot_config[handoff_team_id]')).toBe('');
+      expect(formDataArg.get('bot_config[max_replies_per_conversation]')).toBe(
+        '25'
+      );
+      expect(formDataArg.get('bot_config[fallback_message]')).toBe('');
+      expect(formDataArg.has('avatar')).toBe(false);
+      expect([...formDataArg.values()]).not.toContain('null');
     });
 
     it('sends correct actions if API is error', async () => {
@@ -73,6 +99,20 @@ describe('#actions', () => {
       expect(axios.patch.mock.calls.length).toBe(1);
       const formDataArg = axios.patch.mock.calls[0][1];
       expect(formDataArg instanceof FormData).toBe(true);
+    });
+
+    it('sends the AI agent settings as bot_config fields', async () => {
+      axios.patch.mockResolvedValue({ data: agentBotRecords[0] });
+      await actions.update({ commit }, { id: 11, data: aiAgentBotData });
+
+      expect(axios.patch.mock.calls[0][0]).toContain('/agent_bots/11');
+      const formDataArg = axios.patch.mock.calls[0][1];
+      expect(formDataArg.get('bot_type')).toBe('ai_agent');
+      expect(formDataArg.get('bot_config[model]')).toBe('gpt-test-mini');
+      expect(formDataArg.get('bot_config[reasoning_effort]')).toBe('');
+      expect(formDataArg.get('bot_config[max_replies_per_conversation]')).toBe(
+        '25'
+      );
     });
 
     it('sends correct actions if API is error', async () => {
