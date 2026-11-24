@@ -160,6 +160,34 @@ RSpec.describe Inbox do
     end
   end
 
+  describe '#ai_agent_active?' do
+    let(:inbox) { create(:inbox) }
+    let(:agent_bot) { create(:agent_bot, :ai_agent, account: inbox.account) }
+
+    it 'is true with an active AI agent bot' do
+      create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+
+      expect(inbox.reload.ai_agent_active?).to be(true)
+    end
+
+    it 'is false without a bot, with an inactive AI agent bot or a webhook bot' do
+      expect(inbox.ai_agent_active?).to be(false)
+
+      agent_bot_inbox = create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot, status: :inactive)
+      expect(inbox.reload.ai_agent_active?).to be(false)
+
+      agent_bot_inbox.update!(status: :active, agent_bot: create(:agent_bot, account: inbox.account))
+      expect(inbox.reload.ai_agent_active?).to be(false)
+    end
+
+    it 'is false while the inbox link of a deleted bot waits for its removal' do
+      create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+      AgentBot.where(id: agent_bot.id).delete_all
+
+      expect(inbox.reload.ai_agent_active?).to be(false)
+    end
+  end
+
   describe '#validations' do
     let(:inbox) { FactoryBot.create(:inbox) }
 

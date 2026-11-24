@@ -124,7 +124,7 @@
         },
         "REPLY_LIMIT": {
           "LABEL": "Reply limit",
-          "HELP": "Bot replies in one conversation before it hands the conversation to the team, from 1 to 200. Leave blank to use the default.",
+          "HELP": "Bot replies in one conversation before it hands the conversation to the team, from 1 to 200. The count starts again once the team has had the conversation. Leave blank to use the default.",
           "ERROR": "Enter a whole number from 1 to 200"
         },
         "FALLBACK_MESSAGE": {

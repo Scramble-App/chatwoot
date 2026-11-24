@@ -105,6 +105,32 @@ RSpec.describe AiAgents::HandoffService do
     expect(conversation.reload.team).to eq(other_team)
   end
 
+  context 'when the conversation has the handoff team already, as after the visitor wrote again' do
+    let(:agent) { create(:user, account: account, role: :agent) }
+
+    before do
+      create(:inbox_member, inbox: conversation.inbox, user: agent)
+      create(:team_member, team: team, user: agent)
+      conversation.update!(team: team)
+      conversation.inbox.update!(enable_auto_assignment: false)
+      allow(OnlineStatusTracker).to receive(:get_available_users).and_return({ agent.id.to_s => 'online' })
+    end
+
+    it 'assigns an online agent of the team, as setting the team does' do
+      team.update!(allow_auto_assign: true)
+
+      hand_off(reason: 'human_requested')
+
+      expect(conversation.reload).to have_attributes(status: 'open', team: team, assignee: agent)
+    end
+
+    it 'leaves it unassigned when the team does not auto assign' do
+      hand_off(reason: 'human_requested')
+
+      expect(conversation.reload).to have_attributes(status: 'open', team: team, assignee: nil)
+    end
+  end
+
   it 'leaves the team alone when the handoff team was deleted' do
     agent_bot
     team.destroy!

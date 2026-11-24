@@ -65,8 +65,14 @@ class AiAgents::ReplyService
     @handoff_request ? hand_off_with(result.reply, language: result.language) : post(result.reply)
   end
 
+  # Replies since the team last had the conversation (the bot's handoff note or a team member's reply), so a visitor who
+  # writes again after the team resolved it gets the AI agent's replies again
   def reply_limit_reached?
-    conversation.messages.outgoing.where(private: false, sender: agent_bot).count >= settings.max_replies_per_conversation
+    replies = conversation.messages.outgoing.where(private: false, sender: agent_bot)
+    team_turn = conversation.messages.where(private: true, sender: agent_bot)
+                            .or(conversation.messages.outgoing.where(private: false, sender_type: 'User')).maximum(:id)
+    replies = replies.where('messages.id > ?', team_turn) if team_turn
+    replies.count >= settings.max_replies_per_conversation
   end
 
   def still_replyable?
