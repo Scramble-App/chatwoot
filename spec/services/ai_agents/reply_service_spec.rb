@@ -213,6 +213,33 @@ RSpec.describe AiAgents::ReplyService do
     expect(events).not_to include(Events::Types::CONVERSATION_TYPING_ON)
   end
 
+  context 'when the bot gave its hourly number of replies across its conversations' do
+    let(:other_conversation) { create(:conversation, account: account, inbox: inbox) }
+
+    before { stub_const('AiAgents::ReplyService::MAX_REPLIES_PER_HOUR', 2) }
+
+    it 'hands off and posts the fallback message without calling OpenAI' do
+      create_list(:message, 2, conversation: other_conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot)
+
+      reply
+
+      expect(note).to include('Reason: the AI agent reached its limit of replies per hour')
+      expect(bot_messages.last.content).to eq(AiAgents::Defaults::FALLBACK_MESSAGE)
+      expect(conversation.reload.status).to eq('open')
+      expect(a_request(:post, AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL)).not_to have_been_made
+    end
+
+    it 'replies again once those replies are more than an hour old' do
+      create_list(:message, 2, conversation: other_conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot,
+                               created_at: 61.minutes.ago)
+      stub_openai_responses(openai_reply(reply: 'Scramble funds brands.', kind: 'answer', entry_keys: ['KB-001']))
+
+      reply
+
+      expect(bot_messages.map(&:content)).to eq(['Scramble funds brands.'])
+    end
+  end
+
   context 'when the visitor writes again after the team resolved the conversation' do
     before do
       create_list(:message, 3, conversation: conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot)

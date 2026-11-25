@@ -49,6 +49,7 @@ en:
         human_requested: 'the visitor asked for a person'
         other: 'other'
         limit: 'the reply limit of the conversation was reached'
+        hourly_limit: 'the AI agent reached its limit of replies per hour'
         error: 'the AI agent could not reply (OpenAI error)'
         ungrounded: 'the reply of the AI agent was not backed by the knowledge base'
   ai_generations:
