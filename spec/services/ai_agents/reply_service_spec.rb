@@ -213,30 +213,50 @@ RSpec.describe AiAgents::ReplyService do
     expect(events).not_to include(Events::Types::CONVERSATION_TYPING_ON)
   end
 
-  context 'when the bot gave its hourly number of replies across its conversations' do
-    let(:other_conversation) { create(:conversation, account: account, inbox: inbox) }
+  context 'when the bot used its replies of the hour' do
+    let(:openai) { AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL }
 
-    before { stub_const('AiAgents::ReplyService::MAX_REPLIES_PER_HOUR', 2) }
+    before do
+      freeze_time
+      stub_const('AiAgents::ReplyService::MAX_REPLIES_PER_HOUR', 1)
+    end
 
     it 'hands off and posts the fallback message without calling OpenAI' do
-      create_list(:message, 2, conversation: other_conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot)
-
+      stub_openai_responses(openai_reply(reply: 'Scramble funds brands.', kind: 'answer', entry_keys: ['KB-001']))
       reply
+
+      reply(visitor_message('And what does it cost?'))
 
       expect(note).to include('Reason: the AI agent reached its limit of replies per hour')
       expect(bot_messages.last.content).to eq(AiAgents::Defaults::FALLBACK_MESSAGE)
       expect(conversation.reload.status).to eq('open')
-      expect(a_request(:post, AiAgentOpenaiHelpers::OPENAI_RESPONSES_URL)).not_to have_been_made
+      expect(a_request(:post, openai)).to have_been_made.once
     end
 
-    it 'replies again once those replies are more than an hour old' do
-      create_list(:message, 2, conversation: other_conversation, account: account, inbox: inbox, message_type: :outgoing, sender: agent_bot,
-                               created_at: 61.minutes.ago)
-      stub_openai_responses(openai_reply(reply: 'Scramble funds brands.', kind: 'answer', entry_keys: ['KB-001']))
-
+    it 'counts a reply it dropped because the visitor wrote again' do
+      newer = nil
+      stub_request(:post, openai).to_return do
+        newer = visitor_message('And what does it cost?')
+        { status: 200, body: openai_reply(reply: 'Scramble funds brands.', kind: 'answer', entry_keys: ['KB-001']).to_json }
+      end
       reply
+      expect(bot_messages).to be_empty
 
-      expect(bot_messages.map(&:content)).to eq(['Scramble funds brands.'])
+      reply(newer)
+
+      expect(note).to include('Reason: the AI agent reached its limit of replies per hour')
+      expect(a_request(:post, openai)).to have_been_made.once
+    end
+
+    it 'replies again the next hour' do
+      stub_openai_responses(openai_reply(reply: 'Scramble funds brands.', kind: 'answer', entry_keys: ['KB-001']),
+                            openai_reply(reply: 'The fee is agreed before you sign.', kind: 'answer', entry_keys: ['KB-001']))
+      reply
+      travel 1.hour
+
+      reply(visitor_message('And what does it cost?'))
+
+      expect(bot_messages.map(&:content)).to eq(['Scramble funds brands.', 'The fee is agreed before you sign.'])
     end
   end
 

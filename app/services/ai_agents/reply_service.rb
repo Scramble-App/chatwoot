@@ -13,9 +13,10 @@ class AiAgents::ReplyService
   # Widget contacts get a Haikunator name, such as bold-river-421, until the visitor gives their own
   GENERATED_NAME = /\A[a-z]+-[a-z]+-\d+\z/
 
-  # A ceiling on the bot's model costs when someone floods its inboxes with conversations: above this many replies in the
-  # last hour, across its conversations, the bot hands every message to the team without a model call
-  MAX_REPLIES_PER_HOUR = ENV.fetch('AI_AGENT_MAX_REPLIES_PER_HOUR', '200').to_i
+  # A ceiling on the bot's model costs when someone floods its inboxes: the replies it works on in a clock hour, across its
+  # conversations, counted before the model call (a reply dropped because the visitor wrote again cost one too). Above it
+  # the bot hands every message to the team without a model call. A reply can take several model requests (tool calls).
+  MAX_REPLIES_PER_HOUR = ENV.fetch('AI_AGENT_MAX_REPLIES_PER_HOUR', '').to_i.then { |limit| limit.positive? ? limit : 200 }
 
   # message: the latest incoming message of the conversation
   pattr_initialize [:agent_bot!, :message!]
@@ -81,10 +82,12 @@ class AiAgents::ReplyService
   end
 
   def hourly_limit_reached?
-    replies = Message.where(sender: agent_bot, message_type: :outgoing, private: false, created_at: 1.hour.ago..)
-    return false if replies.count < MAX_REPLIES_PER_HOUR
+    key = format(Redis::Alfred::AI_AGENT_HOURLY_REPLIES_KEY, agent_bot_id: agent_bot.id, hour: Time.current.to_i / 1.hour.to_i)
+    count = Redis::Alfred.incr(key)
+    Redis::Alfred.expire(key, 1.hour.to_i) if count == 1
+    return false if count <= MAX_REPLIES_PER_HOUR
 
-    Rails.logger.warn("[ai-agent] agent_bot=#{agent_bot.id} gave #{MAX_REPLIES_PER_HOUR} replies in the last hour, handing off")
+    Rails.logger.warn("[ai-agent] agent_bot=#{agent_bot.id} reply #{count} this hour is over its #{MAX_REPLIES_PER_HOUR}, handing off")
     true
   end
 
