@@ -6,7 +6,8 @@ class AiAgents::HandoffService
   LABEL = 'ai-handoff'.freeze
   NOTE_QUESTION_LIMIT = 1_000
 
-  # reason: no_answer, human_requested or other from the model, or limit, error or ungrounded from the reply service.
+  # reason: no_answer, human_requested or other from the model, or limit, hourly_limit, error or ungrounded from the reply
+  # service.
   # message: the visitor message being answered; language: of the agent's reply, if there was one.
   pattr_initialize [:agent_bot!, :message!, :reason!, { summary: nil, unanswered_question: nil, visitor_question: nil, language: nil }]
 

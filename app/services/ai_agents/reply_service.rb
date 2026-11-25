@@ -6,18 +6,24 @@
 # history. A handoff comes before its reply, which keeps the waiting time the handoff started (preserve_waiting_since),
 # so a handoff that fails fails the job before anything is posted and the job's retry completes it.
 #
-# The reply limit, an OpenAI error and a reply that isn't grounded post the fallback message and hand off.
+# The reply limits, an OpenAI error and a reply that isn't grounded post the fallback message and hand off.
 class AiAgents::ReplyService
   include Events::Types
 
   # Widget contacts get a Haikunator name, such as bold-river-421, until the visitor gives their own
   GENERATED_NAME = /\A[a-z]+-[a-z]+-\d+\z/
 
+  # A ceiling on the bot's model costs when someone floods its inboxes: the replies it works on in a clock hour, across its
+  # conversations, counted before the model call (a reply dropped because the visitor wrote again cost one too). Above it
+  # the bot hands every message to the team without a model call. A reply can take several model requests (tool calls).
+  MAX_REPLIES_PER_HOUR = ENV.fetch('AI_AGENT_MAX_REPLIES_PER_HOUR', '').to_i.then { |limit| limit.positive? ? limit : 200 }
+
   # message: the latest incoming message of the conversation
   pattr_initialize [:agent_bot!, :message!]
 
   def perform
     return hand_off_with(settings.fallback_message, reason: 'limit') if reply_limit_reached?
+    return hand_off_with(settings.fallback_message, reason: 'hourly_limit') if hourly_limit_reached?
 
     result = with_typing { responder.perform }
     reply_with(result) if still_replyable?
@@ -73,6 +79,16 @@ class AiAgents::ReplyService
                             .or(conversation.messages.outgoing.where(private: false, sender_type: 'User')).maximum(:id)
     replies = replies.where('messages.id > ?', team_turn) if team_turn
     replies.count >= settings.max_replies_per_conversation
+  end
+
+  def hourly_limit_reached?
+    key = format(Redis::Alfred::AI_AGENT_HOURLY_REPLIES_KEY, agent_bot_id: agent_bot.id, hour: Time.current.to_i / 1.hour.to_i)
+    count = Redis::Alfred.incr(key)
+    Redis::Alfred.expire(key, 1.hour.to_i) if count == 1
+    return false if count <= MAX_REPLIES_PER_HOUR
+
+    Rails.logger.warn("[ai-agent] agent_bot=#{agent_bot.id} reply #{count} this hour is over its #{MAX_REPLIES_PER_HOUR}, handing off")
+    true
   end
 
   def still_replyable?

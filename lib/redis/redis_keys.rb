@@ -60,4 +60,8 @@ module Redis::RedisKeys
 
   ## Account Email Rate Limiting
   ACCOUNT_OUTBOUND_EMAIL_COUNT_KEY = 'OUTBOUND_EMAIL_COUNT::%<account_id>d::%<date>s'.freeze
+
+  ## AI Agent
+  # Replies an AI agent bot worked on in a clock hour (Time#to_i / 3600), for its hourly ceiling
+  AI_AGENT_HOURLY_REPLIES_KEY = 'AI_AGENT_HOURLY_REPLIES::%<agent_bot_id>d::%<hour>d'.freeze
 end
