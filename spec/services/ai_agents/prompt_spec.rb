@@ -10,7 +10,7 @@ RSpec.describe AiAgents::Prompt do
     it 'puts the fixed rules, tone of voice, instructions, knowledge base and page index in this order' do
       instructions = prompt.instructions
       positions = ['FIXED RULES', "TONE OF VOICE\nCalm and brief.", "INSTRUCTIONS\n#{AiAgents::Defaults::INSTRUCTIONS}",
-                   "#KB-001 Basics | What is it?\nShort: Sample short answer.\nFull: A sample.",
+                   "#KB-001 Basics | What is it?\nSummary: Sample short answer.\nDetails: A sample.",
                    "[3] https://example.com/faq\n[7] Plans — https://example.com/plans"].map { |part| instructions.index(part) }
 
       expect(positions).to all(be_present)
