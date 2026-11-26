@@ -14,18 +14,18 @@ RSpec.describe AiAgents::KnowledgeFormatter do
 
     expect(described_class.new(entries).to_s).to eq(<<~TEXT.chomp)
       #KB-021 Pricing | How is my monthly repayment calculated?
-      Short: It goes to the principal.
-      Full: Every repayment goes to the principal.
-      Point: No interest.
+      Summary: It goes to the principal.
+      Details: Every repayment goes to the principal.
+      Selling point: No interest.
 
       #KB-022 Pricing | Is there a fee?
-      Short: One flat fee.
+      Summary: One flat fee.
     TEXT
   end
 
   it 'leaves out a blank category' do
     expect(described_class.new([entry(key: 'KB-001', category: ' ', question: 'What is it?', answer: 'A sample.')]).to_s)
-      .to eq("#KB-001 | What is it?\nFull: A sample.")
+      .to eq("#KB-001 | What is it?\nDetails: A sample.")
   end
 
   it 'sorts by category, then by key number' do
@@ -44,6 +44,6 @@ RSpec.describe AiAgents::KnowledgeFormatter do
   it 'keeps a field on its lines when it has blank lines inside' do
     text = described_class.new([entry(key: 'KB-002', question: "Two\nlines?", answer: "First paragraph.\r\n\r\n\nSecond paragraph.")]).to_s
 
-    expect(text).to eq("#KB-002 | Two lines?\nFull: First paragraph.\nSecond paragraph.")
+    expect(text).to eq("#KB-002 | Two lines?\nDetails: First paragraph.\nSecond paragraph.")
   end
 end

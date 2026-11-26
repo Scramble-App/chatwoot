@@ -1,14 +1,15 @@
 # The KNOWLEDGE BASE section of the AI agent prompt: one block per entry, sorted by category, then key number, then key.
 #
 #   #KB-021 Pricing | How is my monthly repayment calculated?
-#   Short: ...
-#   Full: ...
-#   Point: ...
+#   Summary: ...
+#   Details: ...
+#   Selling point: ...
 #
+# The labels don't call the fields answers, as the entries are facts for the AI agent's own replies, not text to copy.
 # A blank field drops its line, a blank category drops its part of the first line, and entries are separated by one
 # blank line. Blank lines inside a field are removed so they can't be mistaken for the end of an entry.
 class AiAgents::KnowledgeFormatter
-  FIELDS = { 'Short' => :short_answer, 'Full' => :answer, 'Point' => :selling_point }.freeze
+  FIELDS = { 'Summary' => :short_answer, 'Details' => :answer, 'Selling point' => :selling_point }.freeze
 
   def initialize(entries)
     @entries = entries
