@@ -32,6 +32,21 @@ describe AgentBotListener do
         listener.message_created(event)
       end
 
+      it 'sends message to an agent bot without a bot type' do
+        agent_bot.update!(bot_type: nil)
+        create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+        expect(AgentBots::WebhookJob).to receive(:perform_later).once
+        listener.message_created(event)
+      end
+
+      it 'keeps the conversation of a webhook bot pending when an agent replies' do
+        create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
+        conversation.update!(status: :pending, assignee: nil)
+        allow(AgentBots::WebhookJob).to receive(:perform_later)
+        listener.message_created(event)
+        expect(conversation.reload.status).to eq('pending')
+      end
+
       it 'does not send message to agent bot if url is empty' do
         agent_bot = create(:agent_bot, outgoing_url: '')
         create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
@@ -182,6 +197,83 @@ describe AgentBotListener do
 
         listener.webwidget_triggered(event)
       end
+    end
+  end
+
+  describe 'AI agent bots' do
+    # A bot switched from webhook to ai_agent can keep its old URL
+    let(:ai_agent_bot) { create(:agent_bot, :ai_agent, account: account, outgoing_url: 'https://example.com/old-webhook') }
+    let(:contact) { conversation.contact }
+
+    def message_event(name = 'message.created', **attributes)
+      message = create(:message, account: account, inbox: inbox, conversation: conversation, sender: contact, **attributes)
+      Events::Base.new(name, Time.zone.now, message: message)
+    end
+
+    before do
+      create(:agent_bot_inbox, inbox: inbox, agent_bot: ai_agent_bot)
+      allow(AgentBots::WebhookJob).to receive(:perform_later)
+    end
+
+    it 'enqueues a reply to an incoming visitor message instead of a webhook' do
+      event = message_event
+
+      expect { listener.message_created(event) }.to have_enqueued_job(AgentBots::AiAgentReplyJob)
+        .with(ai_agent_bot.id, event.data[:message].id).on_queue('high')
+      expect(AgentBots::WebhookJob).not_to have_received(:perform_later)
+    end
+
+    it 'enqueues a reply as the bot assigned to the conversation' do
+      inbox.agent_bot_inbox.destroy!
+      conversation.update!(assignee_agent_bot: ai_agent_bot, assignee: nil)
+      event = message_event
+
+      expect { listener.message_created(event) }.to have_enqueued_job(AgentBots::AiAgentReplyJob).with(ai_agent_bot.id, event.data[:message].id)
+    end
+
+    it 'does not reply to private notes, outgoing messages or messages of other senders' do
+      events = [
+        message_event(private: true),
+        message_event(message_type: :outgoing, sender: user),
+        message_event(sender: user)
+      ]
+
+      expect { events.each { |event| listener.message_created(event) } }.not_to have_enqueued_job(AgentBots::AiAgentReplyJob)
+    end
+
+    it 'opens a pending conversation, assigned to the inbox member who answered the visitor, so the AI agent stops' do
+      create(:inbox_member, inbox: inbox, user: user)
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user))
+
+      expect(conversation.reload).to have_attributes(status: 'open', assignee: user, label_list: [])
+      expect(conversation.messages.where(private: true)).to be_empty
+    end
+
+    it 'opens a pending conversation without assigning someone who answered from outside the inbox' do
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user))
+
+      expect(conversation.reload).to have_attributes(status: 'open', assignee: nil)
+    end
+
+    it 'keeps the conversation pending for private notes and messages of the bot' do
+      conversation.update!(status: :pending, assignee: nil)
+
+      listener.message_created(message_event(message_type: :outgoing, sender: user, private: true))
+      listener.message_created(message_event(message_type: :outgoing, sender: ai_agent_bot))
+
+      expect(conversation.reload.status).to eq('pending')
+    end
+
+    it 'sends no webhook events' do
+      listener.message_updated(message_event('message.updated'))
+      listener.conversation_opened(Events::Base.new('conversation.opened', Time.zone.now, conversation: conversation))
+      listener.conversation_updated(Events::Base.new('conversation.updated', Time.zone.now, conversation: conversation))
+
+      expect(AgentBots::WebhookJob).not_to have_received(:perform_later)
     end
   end
 end

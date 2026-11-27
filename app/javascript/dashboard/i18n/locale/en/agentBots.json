@@ -37,7 +37,7 @@
       "LOADING": "Fetching bots...",
       "TABLE_HEADER": {
         "DETAILS": "Bot Details",
-        "URL": "Webhook URL",
+        "TYPE": "Type",
         "ACTIONS": "Actions"
       }
     },
@@ -93,10 +93,44 @@
         "LABEL": "Description",
         "PLACEHOLDER": "What does this bot do?"
       },
+      "TYPE": {
+        "LABEL": "Bot type",
+        "WEBHOOK_DESCRIPTION": "Sends conversation events to your service, which replies through the API.",
+        "AI_AGENT_DESCRIPTION": "Answers visitors from its knowledge base and website pages, and hands the conversation to your team when it cannot."
+      },
       "WEBHOOK_URL": {
         "LABEL": "Webhook URL",
         "PLACEHOLDER": "https://example.com/webhook",
         "REQUIRED": "Webhook URL is required"
+      },
+      "AI_AGENT": {
+        "MODEL": {
+          "LABEL": "Model",
+          "PLACEHOLDER": "OpenAI integration model",
+          "HELP": "Leave blank to use the model of the OpenAI integration."
+        },
+        "TONE_OF_VOICE": {
+          "LABEL": "Tone of voice"
+        },
+        "INSTRUCTIONS": {
+          "LABEL": "Instructions"
+        },
+        "DEFAULT_TEXT_HELP": "Leave blank to use the default text shown in the field.",
+        "USE_DEFAULT": "Start from the default",
+        "HANDOFF_TEAM": {
+          "LABEL": "Handoff team",
+          "NONE": "None",
+          "HELP": "Conversations the bot can't answer go to this team. With none, any member of the inbox can pick them up."
+        },
+        "REPLY_LIMIT": {
+          "LABEL": "Reply limit",
+          "HELP": "Bot replies in one conversation before it hands the conversation to the team, from 1 to 200. The count starts again once the team has had the conversation. Leave blank to use the default.",
+          "ERROR": "Enter a whole number from 1 to 200"
+        },
+        "FALLBACK_MESSAGE": {
+          "LABEL": "Fallback message",
+          "HELP": "Sent when the bot fails to reply or reaches the reply limit, right before it hands off. Leave blank to use the default text."
+        }
       },
       "ERRORS": {
         "NAME": "Bot name is required",
@@ -111,7 +145,48 @@
       "DESCRIPTION": "Configure a webhook bot to integrate with your custom services. The bot will receive and process events from conversations and can respond to them."
     },
     "TYPES": {
-      "WEBHOOK": "Webhook bot"
+      "WEBHOOK": "Webhook",
+      "AI_AGENT": "AI agent"
+    },
+    "PAGES": {
+      "BUTTON_TEXT": "Website pages",
+      "TITLE": "Website pages",
+      "DESCRIPTION": "{botName} can open these pages to answer visitors. They are fetched in the background and refreshed daily.",
+      "CLOSE": "Close",
+      "RELOAD": "Reload list",
+      "RETRY": "Try again",
+      "LOADING": "Fetching pages...",
+      "EMPTY": "No pages yet. Add the pages the bot may use.",
+      "LAST_FETCHED": "Last fetched {time}",
+      "STATUS": {
+        "PENDING": "Fetching",
+        "FETCHED": "Fetched",
+        "FAILED": "Failed"
+      },
+      "FORM": {
+        "LABEL": "Page URL",
+        "PLACEHOLDER": "https://example.com/page",
+        "ADD": "Add page",
+        "INVALID_URL": "Enter a page URL that starts with http:// or https://"
+      },
+      "REFRESH": {
+        "BUTTON_TEXT": "Fetch again",
+        "SUCCESS_MESSAGE": "The page will be fetched again shortly.",
+        "ERROR_MESSAGE": "Could not fetch the page again. Please try again."
+      },
+      "DELETE": {
+        "BUTTON_TEXT": "Remove page",
+        "CONFIRM": "Remove",
+        "SUCCESS_MESSAGE": "Page removed.",
+        "ERROR_MESSAGE": "Could not remove the page. Please try again."
+      },
+      "API": {
+        "FETCH_ERROR": "Could not load the pages. Please try again.",
+        "ADD_ERROR": "Could not add the page. Please try again."
+      }
+    },
+    "KNOWLEDGE_BASE": {
+      "BUTTON_TEXT": "Knowledge base"
     }
   }
 }

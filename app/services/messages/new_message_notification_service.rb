@@ -3,6 +3,7 @@ class Messages::NewMessageNotificationService
 
   def perform
     return unless message.notifiable?
+    return if ai_agent_answering?
 
     notify_conversation_assignee
     notify_participating_users
@@ -11,6 +12,12 @@ class Messages::NewMessageNotificationService
   private
 
   delegate :conversation, :sender, :account, to: :message
+
+  # The AI agent answers its inbox's pending conversations without an assignee, so agents who took part in the
+  # conversation before aren't told of each message; the team hears of it when the AI agent hands it over
+  def ai_agent_answering?
+    conversation.pending? && conversation.assignee_id.nil? && conversation.inbox.ai_agent_active?
+  end
 
   def notify_conversation_assignee
     return if conversation.assignee.blank?

@@ -31,6 +31,27 @@
 
 en:
   hello: 'Hello world'
+  ai_agents:
+    handoff:
+      label_description: 'Conversations the AI agent passed to the team'
+      unknown: 'unknown'
+      note:
+        title: 'The AI agent passed this conversation to the team.'
+        reason: 'Reason: %{reason}'
+        question: 'Question: %{question}'
+        company: 'Company: %{company}'
+        email: 'Email: %{email}'
+        given_email: 'Email given in chat: %{given_email}'
+        language: 'Language: %{language}'
+        summary: 'Summary: %{summary}'
+      reasons:
+        no_answer: 'no confirmed answer in the knowledge base'
+        human_requested: 'the visitor asked for a person'
+        other: 'other'
+        limit: 'the reply limit of the conversation was reached'
+        hourly_limit: 'the AI agent reached its limit of replies per hour'
+        error: 'the AI agent could not reply (OpenAI error)'
+        ungrounded: 'the reply of the AI agent was not backed by the knowledge base'
   ai_generations:
     generic_error: 'Failed to generate. Please try again.'
     stale: 'Generation timed out. Please try again.'
@@ -56,6 +77,20 @@ en:
         invalid: is not a valid timezone
       support_email:
         invalid: is not a valid email address
+    agent_bots:
+      bot_config:
+        unknown_keys: 'has unknown keys: %{keys}'
+        text: '%{key} must be text of at most %{count} characters'
+        invalid: '%{key} is invalid'
+        range: '%{key} must be a whole number from %{min} to %{max}'
+        team: '%{key} must be a team of this account'
+    agent_bot_knowledge_entries:
+      answer:
+        required_to_publish: 'or short answer is required to publish the entry'
+    agent_bot_pages:
+      url:
+        invalid: 'must be an http or https link'
+      limit: 'A bot can have at most %{count} pages'
     validations:
       presence: must not be blank
     webhook:
@@ -516,6 +551,20 @@ en:
 
       Transcript:
       %{format_messages}
+  agent_bot_knowledge:
+    import:
+      file_missing: 'Choose a CSV file to import'
+      file_too_large: 'The file is larger than %{size} MB'
+      invalid_encoding: 'The file must be a CSV file in UTF-8'
+      null_character: 'The file contains NUL characters: save it again as a CSV text file'
+      invalid_csv: 'The file is not a valid CSV file: %{error}'
+      no_columns: 'The file has none of the knowledge base columns: %{headers}'
+      header_too_long: 'The header row of the file is too long: keep it under %{size} KB'
+      too_many_rows: 'The file has more than %{count} rows'
+      duplicate_key: 'The key %{key} is already in row %{row}'
+      changed_meanwhile: 'The knowledge base changed during the import, so nothing was imported. Import the file again.'
+    pages:
+      no_text: 'The page has no readable text'
   agent_capacity_policy:
     inbox_already_assigned: 'Inbox has already been assigned to this policy'
   portals:

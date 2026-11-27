@@ -175,6 +175,13 @@ class Inbox < ApplicationRecord
                                             status: 'enabled').count.positive?
   end
 
+  # Whether an AI agent bot answers the inbox's pending conversations. A deleted bot's inbox link goes later, in a job.
+  def ai_agent_active?
+    return false unless agent_bot_inbox&.active?
+
+    agent_bot_inbox.agent_bot&.ai_agent? || false
+  end
+
   def inbox_type
     channel.name
   end

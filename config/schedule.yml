@@ -87,3 +87,10 @@ remove_stale_ai_generations_job:
   cron: '30 22 * * *'
   class: 'Internal::RemoveStaleAiGenerationsJob'
   queue: housekeeping
+
+# executed daily at 0300 UTC
+# fetches the website pages of the AI agent bots again
+refresh_agent_bot_pages_job:
+  cron: '0 3 * * *'
+  class: 'AgentBotPages::RefreshAllJob'
+  queue: scheduled_jobs

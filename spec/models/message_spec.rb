@@ -300,6 +300,50 @@ RSpec.describe Message do
       expect(conversation.open?).to be false
       expect(conversation.pending?).to be true
     end
+
+    context 'when the team had the conversation before it was resolved' do
+      let(:agent) { create(:user, account: conversation.account) }
+      let(:team) { create(:team, account: conversation.account) }
+      let(:ai_agent_bot) { create(:agent_bot, :ai_agent, account: conversation.account) }
+
+      before do
+        create(:team_member, team: team, user: agent)
+        conversation.update!(status: :resolved, assignee: agent, team: team)
+      end
+
+      it 'gives it to the active AI agent bot as pending, without the assignee but with the team' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot)
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: nil, team_id: team.id)
+      end
+
+      it 'starts the wait again from the message for the AI agent bot, so the old assignee is not charged for it' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot)
+        # A muted contact's messages set the wait without reopening the conversation
+        conversation.update!(waiting_since: 2.days.ago)
+
+        expect { message.save! }.not_to have_enqueued_job(ReportingEvents::HandoffWithoutReplyJob)
+        expect(conversation.reload.waiting_since).to be_within(1.second).of(message.created_at)
+      end
+
+      it 'keeps the assignee and team for a webhook bot' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: create(:agent_bot, account: conversation.account))
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'pending', assignee_id: agent.id, team_id: team.id)
+      end
+
+      it 'opens it for the assignee and team when the AI agent bot is inactive' do
+        create(:agent_bot_inbox, inbox: conversation.inbox, agent_bot: ai_agent_bot, status: :inactive)
+
+        message.save!
+
+        expect(conversation.reload).to have_attributes(status: 'open', assignee_id: agent.id, team_id: team.id)
+      end
+    end
   end
 
   describe '#mark_pending_conversation_as_open_for_human_response' do

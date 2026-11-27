@@ -37,10 +37,21 @@ class AgentBot < ApplicationRecord
                                     foreign_key: :assignee_agent_bot_id,
                                     dependent: :nullify,
                                     inverse_of: :assignee_agent_bot
+  # The knowledge base and pages of an AI agent bot
+  has_many :knowledge_entries, class_name: 'AgentBotKnowledgeEntry', dependent: :delete_all
+  has_many :knowledge_questions, class_name: 'AgentBotKnowledgeQuestion', dependent: :delete_all
+  has_many :pages, class_name: 'AgentBotPage', dependent: :delete_all
   belongs_to :account, optional: true
-  enum bot_type: { webhook: 0 }
+  enum bot_type: { webhook: 0, ai_agent: 1 }
 
   validates :outgoing_url, length: { maximum: Limits::URL_LENGTH_LIMIT }
+  # Only when the settings can change, so a later deleted handoff team doesn't block other updates of the bot
+  before_validation :normalize_ai_agent_settings, if: :ai_agent_settings_changed?
+  validate :validate_ai_agent_settings, if: :ai_agent_settings_changed?
+
+  def ai_agent_settings
+    AiAgents::Settings.new(self)
+  end
 
   def available_name
     name
@@ -65,6 +76,20 @@ class AgentBot < ApplicationRecord
 
   def system_bot?
     account.nil?
+  end
+
+  private
+
+  def ai_agent_settings_changed?
+    ai_agent? && (new_record? || will_save_change_to_bot_config? || will_save_change_to_bot_type?)
+  end
+
+  def normalize_ai_agent_settings
+    self.bot_config = AiAgents::Settings.normalize_line_breaks(bot_config) if bot_config.is_a?(Hash)
+  end
+
+  def validate_ai_agent_settings
+    ai_agent_settings.validation_errors.each { |message| errors.add(:bot_config, message) }
   end
 end
 

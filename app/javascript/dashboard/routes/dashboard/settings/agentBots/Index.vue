@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useMapGetter, useStore } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
@@ -10,6 +11,7 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import AgentBotModal from './components/AgentBotModal.vue';
+import AgentBotPagesDialog from './components/AgentBotPagesDialog.vue';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import {
   BaseTable,
@@ -23,6 +25,8 @@ const MODAL_TYPES = {
 };
 
 const store = useStore();
+const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 
 const agentBots = useMapGetter('agentBots/getBots');
@@ -34,14 +38,19 @@ const loading = ref({});
 const modalType = ref(MODAL_TYPES.CREATE);
 const agentBotModalRef = ref(null);
 const agentBotDeleteDialogRef = ref(null);
+const agentBotPagesDialogRef = ref(null);
 
 const tableHeaders = computed(() => {
   return [
     t('AGENT_BOTS.LIST.TABLE_HEADER.DETAILS'),
-    t('AGENT_BOTS.LIST.TABLE_HEADER.URL'),
+    t('AGENT_BOTS.LIST.TABLE_HEADER.TYPE'),
     t('AGENT_BOTS.LIST.TABLE_HEADER.ACTIONS'),
   ];
 });
+
+const isAiAgentBot = bot => bot.bot_type === 'ai_agent';
+
+const hasAiAgentBots = computed(() => agentBots.value.some(isAiAgentBot));
 
 const selectedBotName = computed(() => selectedBot.value?.name || '');
 
@@ -66,6 +75,17 @@ const openEditModal = bot => {
 const openDeletePopup = bot => {
   selectedBot.value = bot;
   agentBotDeleteDialogRef.value.open();
+};
+
+const openPagesDialog = bot => {
+  agentBotPagesDialogRef.value.open(bot);
+};
+
+const openKnowledgeBase = bot => {
+  router.push({
+    name: 'ai_agent_knowledge',
+    params: { accountId: route.params.accountId, botId: bot.id },
+  });
 };
 
 const deleteAgentBot = async id => {
@@ -160,13 +180,50 @@ onMounted(() => {
               </BaseTableCell>
 
               <BaseTableCell class="max-w-0">
-                <span class="text-body-main text-n-slate-11 truncate block">
+                <span
+                  class="text-body-main text-n-slate-12 truncate block"
+                  data-test-id="agent-bot-type"
+                >
+                  {{
+                    isAiAgentBot(bot)
+                      ? t('AGENT_BOTS.TYPES.AI_AGENT')
+                      : t('AGENT_BOTS.TYPES.WEBHOOK')
+                  }}
+                </span>
+                <span
+                  v-if="!isAiAgentBot(bot)"
+                  class="text-body-main text-n-slate-11 truncate block"
+                >
                   {{ bot.outgoing_url || bot.bot_config?.webhook_url }}
                 </span>
               </BaseTableCell>
 
-              <BaseTableCell align="end" class="w-24">
-                <div class="flex gap-3 justify-end flex-shrink-0">
+              <BaseTableCell
+                align="end"
+                class="w-24"
+                :class="{ 'md:w-48': hasAiAgentBots }"
+              >
+                <div class="flex flex-wrap gap-3 justify-end">
+                  <template v-if="isAiAgentBot(bot)">
+                    <Button
+                      v-tooltip.top="t('AGENT_BOTS.PAGES.BUTTON_TEXT')"
+                      icon="i-lucide-globe"
+                      slate
+                      sm
+                      data-test-id="agent-bot-pages"
+                      :aria-label="t('AGENT_BOTS.PAGES.BUTTON_TEXT')"
+                      @click="openPagesDialog(bot)"
+                    />
+                    <Button
+                      v-tooltip.top="t('AGENT_BOTS.KNOWLEDGE_BASE.BUTTON_TEXT')"
+                      icon="i-lucide-book-open"
+                      slate
+                      sm
+                      data-test-id="agent-bot-knowledge-base"
+                      :aria-label="t('AGENT_BOTS.KNOWLEDGE_BASE.BUTTON_TEXT')"
+                      @click="openKnowledgeBase(bot)"
+                    />
+                  </template>
                   <Button
                     v-if="!bot.system_bot"
                     v-tooltip.top="t('AGENT_BOTS.EDIT.BUTTON_TEXT')"
@@ -199,6 +256,8 @@ onMounted(() => {
       :type="modalType"
       :selected-bot="selectedBot"
     />
+
+    <AgentBotPagesDialog ref="agentBotPagesDialogRef" />
 
     <Dialog
       ref="agentBotDeleteDialogRef"

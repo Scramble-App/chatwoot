@@ -10,7 +10,8 @@ class MessageTranslations::OpenaiResponsesClient
   WEB_REQUEST_TIMEOUT_SECONDS = 60
   # A reachable OpenAI accepts the connection in well under a second; waiting longer only delays the error
   CONNECT_TIMEOUT_SECONDS = 10
-  OPTIONAL_PARAMS = %w[temperature top_p reasoning service_tier max_output_tokens].freeze
+  # The prompt cache params let an OpenAI-compatible endpoint without prompt caching answer anyway
+  OPTIONAL_PARAMS = %w[temperature top_p reasoning service_tier max_output_tokens prompt_cache_key prompt_cache_options].freeze
   # The memory key includes the effort and the tier, so a rejected value of these is remembered whatever the error says
   VALUE_KEYED_PARAMS = %w[reasoning service_tier].freeze
 

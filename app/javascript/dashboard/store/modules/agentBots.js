@@ -20,6 +20,24 @@ export const state = {
   agentBotInbox: {},
 };
 
+// Multipart, so an avatar file can go with the bot. Rails reads `bot_config[key]`
+// fields as the `bot_config` hash; every value arrives as a string.
+const buildBotFormData = data => {
+  const formData = new FormData();
+  formData.append('name', data.name);
+  formData.append('description', data.description);
+  formData.append('bot_type', data.bot_type || 'webhook');
+  formData.append('outgoing_url', data.outgoing_url);
+  Object.entries(data.bot_config || {}).forEach(([key, value]) => {
+    formData.append(`bot_config[${key}]`, value ?? '');
+  });
+
+  if (data.avatar) {
+    formData.append('avatar', data.avatar);
+  }
+  return formData;
+};
+
 export const getters = {
   getBots($state) {
     return $state.records;
@@ -53,19 +71,7 @@ export const actions = {
   create: async ({ commit }, botData) => {
     commit(types.SET_AGENT_BOT_UI_FLAG, { isCreating: true });
     try {
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('name', botData.name);
-      formData.append('description', botData.description);
-      formData.append('bot_type', botData.bot_type || 'webhook');
-      formData.append('outgoing_url', botData.outgoing_url);
-
-      // Add avatar file if available
-      if (botData.avatar) {
-        formData.append('avatar', botData.avatar);
-      }
-
-      const response = await AgentBotsAPI.create(formData);
+      const response = await AgentBotsAPI.create(buildBotFormData(botData));
       commit(types.ADD_AGENT_BOT, response.data);
       return response.data;
     } catch (error) {
@@ -79,18 +85,7 @@ export const actions = {
   update: async ({ commit }, { id, data }) => {
     commit(types.SET_AGENT_BOT_UI_FLAG, { isUpdating: true });
     try {
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('description', data.description);
-      formData.append('bot_type', data.bot_type || 'webhook');
-      formData.append('outgoing_url', data.outgoing_url);
-
-      if (data.avatar) {
-        formData.append('avatar', data.avatar);
-      }
-
-      const response = await AgentBotsAPI.update(id, formData);
+      const response = await AgentBotsAPI.update(id, buildBotFormData(data));
       commit(types.EDIT_AGENT_BOT, response.data);
     } catch (error) {
       throwErrorMessage(error);
